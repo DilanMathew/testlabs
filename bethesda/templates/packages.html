@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Packages{% endblock %}
+{% block content %}
+<div class="row"><h1>Health packages</h1><a class="btn right" href="{{ url_for('package_form') }}">+ Add package</a></div>
+<div class="tablewrap"><table>
+<tr><th>Code</th><th>Name</th><th>Tests included</th><th class="r">Individual total</th><th class="r">Package price</th><th></th></tr>
+{% for p in rows %}<tr class="{{ 'muted' if not p.active }}"><td>{{ p.code }}</td><td><b>{{ p.name }}</b></td><td class="small">{{ p.codes or '' }}</td>
+<td class="r">{{ p.mrp|money }}</td><td class="r"><b>{{ p.price|money }}</b></td><td><a class="btn sm sec" href="{{ url_for('package_form', pkid=p.id) }}">Edit</a></td></tr>
+{% else %}<tr><td colspan="6" class="muted">No packages.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

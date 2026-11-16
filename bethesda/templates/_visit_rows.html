@@ -1,0 +1,19 @@
+{# expects `rows` of VISIT_SELECT #}
+<div class="tablewrap"><table>
+<tr><th>Visit No</th><th>Date</th><th>Patient</th><th>Referral</th><th class="r">Net</th><th class="r">Due</th><th>Status</th><th></th></tr>
+{% for v in rows %}
+<tr>
+  <td><a href="{{ url_for('visit_detail', vid=v.id) }}">{{ v.visit_no }}</a></td>
+  <td class="small">{{ v.visit_date[:16] }}</td>
+  <td><a href="{{ url_for('patient_detail', pid=v.patient_id) }}">{{ v.patient_name }}</a><div class="small muted">{{ v.patient_no }} · {{ v.patient_phone or '' }}</div></td>
+  <td><span class="badge b-{{ v.referral_type }}">{{ v.referral_type }}</span> <span class="small">{{ referred_by(v) if v.referral_type!='Self' }}</span></td>
+  <td class="r">{{ v.net_amount|money }}</td>
+  <td class="r">{% if v.net_amount > v.paid_amount %}<span class="flagH">{{ (v.net_amount - v.paid_amount)|money }}</span>{% else %}-{% endif %}</td>
+  <td><span class="badge b-{{ v.status|replace(' ','') }}">{{ v.status }}</span></td>
+  <td class="row">
+    <a class="btn sm sec" href="{{ url_for('results', vid=v.id) }}">Results</a>
+    {% if v.status=='Completed' %}<a class="btn sm" target="_blank" href="{{ url_for('report_pdf', vid=v.id) }}">PDF</a>{% endif %}
+  </td>
+</tr>
+{% else %}<tr><td colspan="8" class="muted">No visits found.</td></tr>{% endfor %}
+</table></div>

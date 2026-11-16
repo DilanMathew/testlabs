@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}Hospital{% endblock %}
+{% block content %}
+<h1>{{ 'Edit hospital' if h else 'Add hospital' }}</h1>
+<form method="post" class="card">
+<div class="grid g3">
+  <div><label>Name *</label><input name="name" required value="{{ h.name if h else '' }}"></div>
+  <div><label>Contact person</label><input name="contact_person" value="{{ h.contact_person or '' if h else '' }}"></div>
+  <div><label>Phone</label><input name="phone" value="{{ h.phone or '' if h else '' }}"></div>
+  <div><label>Email</label><input name="email" value="{{ h.email or '' if h else '' }}"></div>
+  <div style="grid-column:span 2"><label>Address</label><input name="address" value="{{ h.address or '' if h else '' }}"></div>
+  <div><label>Commission % on referred bills</label><input type="number" step="0.01" min="0" name="commission_pct" value="{{ h.commission_pct|num if h else settings.default_hospital_commission }}"></div>
+  <div><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" name="active" {{ 'checked' if not h or h.active }}> Active</label></div>
+</div>
+<div class="row" style="margin-top:14px"><button class="btn">Save</button><a class="btn sec" href="{{ url_for('hospitals') }}">Cancel</a></div>
+</form>
+{% endblock %}

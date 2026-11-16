@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Doctors{% endblock %}
+{% block content %}
+<div class="row"><h1>Referring doctors</h1><a class="btn right" href="{{ url_for('doctor_form') }}">+ Add doctor</a></div>
+<div class="tablewrap"><table>
+<tr><th>Name</th><th>Specialization</th><th>Hospital</th><th>Phone</th><th class="r">Comm. %</th><th class="r">Referrals</th><th class="r">Business</th><th class="r">Commission</th><th class="r">Unpaid</th><th></th></tr>
+{% for d in rows %}
+<tr class="{{ 'muted' if not d.active }}"><td><b>{{ d.name }}</b> <span class="small muted">{{ d.qualification or '' }}</span>{% if not d.active %} <span class="badge b-Self">inactive</span>{% endif %}</td>
+<td>{{ d.specialization or '' }}</td><td>{{ d.hospital_name or '-' }}</td><td>{{ d.phone or '' }}</td>
+<td class="r">{{ d.commission_pct|num }}</td><td class="r">{{ d.referrals }}</td><td class="r">{{ d.business|money }}</td>
+<td class="r">{{ d.commission|money }}</td><td class="r {{ 'flagH' if d.unpaid > 0 }}">{{ d.unpaid|money }}</td>
+<td class="row"><a class="btn sm sec" href="{{ url_for('doctor_form', did=d.id) }}">Edit</a><a class="btn sm sec" href="{{ url_for('commissions', party='doctor', doctor_id=d.id) }}">Statement</a></td></tr>
+{% else %}<tr><td colspan="10" class="muted">No doctors yet. Add the doctors who refer patients to you.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

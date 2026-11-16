@@ -1,0 +1,5 @@
+# Patient data must never be committed
+data/
+.venv/
+__pycache__/
+*.pyc

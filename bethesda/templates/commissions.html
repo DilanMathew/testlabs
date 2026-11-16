@@ -1,0 +1,41 @@
+{% extends "base.html" %}{% block title %}Commissions{% endblock %}
+{% block content %}
+<div class="row"><h1>Referral commissions</h1>
+  <a class="btn sec right" href="{{ url_for('commissions_csv', **a.to_dict()) }}">Export CSV (Excel)</a></div>
+<form class="filters">
+  <div><label>From</label><input type="date" name="from" value="{{ a['from'] or '' }}"></div>
+  <div><label>To</label><input type="date" name="to" value="{{ a.to or '' }}"></div>
+  <div><label>Party</label><select name="party"><option value="">Doctors & hospitals</option>
+    <option value="doctor" {{ 'selected' if a.party=='doctor' }}>Doctors</option><option value="hospital" {{ 'selected' if a.party=='hospital' }}>Hospitals</option></select></div>
+  <div><label>Doctor</label><select name="doctor_id"><option value="">All</option>{% for d in doctors %}<option value="{{ d.id }}" {{ 'selected' if a.doctor_id==d.id|string }}>{{ d.name }}</option>{% endfor %}</select></div>
+  <div><label>Hospital</label><select name="hospital_id"><option value="">All</option>{% for h in hospitals %}<option value="{{ h.id }}" {{ 'selected' if a.hospital_id==h.id|string }}>{{ h.name }}</option>{% endfor %}</select></div>
+  <div><label>Status</label><select name="status"><option value="">All</option><option value="unpaid" {{ 'selected' if a.status=='unpaid' }}>Unpaid</option><option value="paid" {{ 'selected' if a.status=='paid' }}>Paid</option></select></div>
+  <div><button class="btn">Filter</button> <a class="btn sec" href="{{ url_for('commissions') }}">Reset</a></div>
+</form>
+
+<h2>Summary</h2>
+<div class="tablewrap"><table>
+<tr><th>Type</th><th>Name</th><th class="r">Referred visits</th><th class="r">Business</th><th class="r">Commission</th><th class="r">Paid</th><th class="r">Unpaid</th></tr>
+{% for s in summary %}<tr><td>{{ s.party|title }}</td><td><a href="{{ url_for('commissions', party=s.party, **{s.party ~ '_id': s.party_id}) }}">{{ s.name }}</a></td>
+<td class="r">{{ s.visits }}</td><td class="r">{{ s.business|money }}</td><td class="r">{{ s.total|money }}</td><td class="r">{{ s.paid|money }}</td><td class="r {{ 'flagH' if s.unpaid > 0 }}">{{ s.unpaid|money }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No commission entries for this filter.</td></tr>{% endfor %}
+{% if summary %}<tr><th colspan="2">Total</th><th class="r">{{ summary|sum(attribute='visits') }}</th><th class="r">{{ summary|sum(attribute='business')|money }}</th><th class="r">{{ summary|sum(attribute='total')|money }}</th><th class="r">{{ summary|sum(attribute='paid')|money }}</th><th class="r">{{ summary|sum(attribute='unpaid')|money }}</th></tr>{% endif %}
+</table></div>
+
+<h2>Details</h2>
+<form method="post" action="{{ url_for('commissions_mark') }}">
+<input type="hidden" name="back" value="{{ request.full_path }}">
+<div class="row" style="margin-bottom:8px"><label style="margin:0">Paid on</label><input type="date" name="paid_on" value="{{ today }}" style="width:auto">
+  <button class="btn sm" name="action" value="paid">Mark selected as paid</button>
+  <button class="btn sm sec" name="action" value="unpaid">Mark selected as unpaid</button>
+  <label style="margin:0 0 0 auto;color:var(--text)"><input type="checkbox" onclick="document.querySelectorAll('.ci').forEach(c=>c.checked=this.checked)"> select all</label></div>
+<div class="tablewrap"><table>
+<tr><th></th><th>Type</th><th>Name</th><th>Visit</th><th>Date</th><th>Patient</th><th class="r">Bill</th><th class="r">%</th><th class="r">Commission</th><th>Status</th></tr>
+{% for r in rows %}<tr><td><input type="checkbox" class="ci" name="items" value="{{ r.party }}:{{ r.visit_id }}"></td>
+<td>{{ r.party|title }}</td><td>{{ r.party_name }}</td><td><a href="{{ url_for('visit_detail', vid=r.visit_id) }}">{{ r.visit_no }}</a></td>
+<td class="small">{{ r.visit_date[:10] }}</td><td>{{ r.patient_name }}</td><td class="r">{{ r.net_amount|money }}</td><td class="r">{{ r.pct|num }}</td>
+<td class="r">{{ r.amount|money }}</td><td>{% if r.paid_on %}<span class="badge b-Completed">Paid {{ r.paid_on }}</span>{% else %}<span class="badge b-Registered">Unpaid</span>{% endif %}</td></tr>
+{% endfor %}
+</table></div>
+</form>
+{% endblock %}

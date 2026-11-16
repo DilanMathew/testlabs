@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% block title %}Test{% endblock %}
+{% block content %}
+<h1>{{ 'Edit test: ' ~ t.name if t else 'Add test' }}</h1>
+<form method="post">
+<div class="card grid g4">
+  <div><label>Code *</label><input name="code" required value="{{ t.code if t else '' }}"></div>
+  <div style="grid-column:span 2"><label>Name *</label><input name="name" required value="{{ t.name if t else '' }}"></div>
+  <div><label>Category</label><input name="category" list="cats" value="{{ t.category if t else '' }}"><datalist id="cats">{% for c in categories %}<option value="{{ c }}">{% endfor %}</datalist></div>
+  <div><label>Sample type</label><input name="sample_type" list="samples" value="{{ t.sample_type or '' if t else '' }}"><datalist id="samples">{% for s in ['Serum','EDTA Whole Blood','Fluoride Plasma','Citrated Plasma','Urine','Stool','Swab'] %}<option value="{{ s }}">{% endfor %}</datalist></div>
+  <div><label>Price ({{ settings.currency }})</label><input type="number" step="0.01" min="0" name="price" value="{{ t.price|num if t else '' }}"></div>
+  <div><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" name="fasting" {{ 'checked' if t and t.fasting }}> Fasting required</label></div>
+  <div><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" name="active" {{ 'checked' if not t or t.active }}> Active</label></div>
+  <div style="grid-column:1/-1"><label>Notes</label><input name="notes" value="{{ t.notes or '' if t else '' }}"></div>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">Parameters & reference ranges</h3>
+  <p class="small muted">Low / High = normal limits (leave one empty for "&lt; X" or "&gt; X"). Female Low/High override them for female patients. "Normal value" is for qualitative results (e.g. Negative) – any other result is flagged. Options are suggestions shown while typing, separated by |.</p>
+  <div class="tablewrap"><table class="ptable" id="ptable">
+    <tr><th>Parameter</th><th>Unit</th><th>Low</th><th>High</th><th>Female low</th><th>Female high</th><th>Reference note</th><th>Normal value</th><th>Options</th><th></th></tr>
+    {% for p in params + [None] %}
+    <tr class="prow">
+      <td><input type="hidden" name="pid" value="{{ p.id if p else '' }}"><input name="pname" value="{{ p.name if p else '' }}"></td>
+      <td><input name="unit" value="{{ p.unit or '' if p else '' }}" style="width:80px"></td>
+      <td><input name="low" value="{{ p.ref_low|num if p else '' }}" style="width:65px"></td>
+      <td><input name="high" value="{{ p.ref_high|num if p else '' }}" style="width:65px"></td>
+      <td><input name="lowf" value="{{ p.ref_low_f|num if p else '' }}" style="width:65px"></td>
+      <td><input name="highf" value="{{ p.ref_high_f|num if p else '' }}" style="width:65px"></td>
+      <td><input name="text" value="{{ p.ref_text or '' if p else '' }}"></td>
+      <td><input name="normal" value="{{ p.normal_value or '' if p else '' }}" style="width:95px"></td>
+      <td><input name="options" value="{{ p.options or '' if p else '' }}"></td>
+      <td><button type="button" class="btn sm danger" onclick="this.closest('tr').querySelector('[name=pname]').value='';this.closest('tr').style.display='none'">✕</button></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <button type="button" class="btn sm sec" style="margin-top:8px" onclick="addRow()">+ Add parameter</button>
+</div>
+<div class="row"><button class="btn">Save test</button><a class="btn sec" href="{{ url_for('tests') }}">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}<script>
+function addRow(){ const rows = document.querySelectorAll('.prow'), r = rows[rows.length-1].cloneNode(true);
+  r.style.display=''; r.querySelectorAll('input').forEach(i => i.value=''); document.querySelector('#ptable tbody').appendChild(r); }
+</script>{% endblock %}

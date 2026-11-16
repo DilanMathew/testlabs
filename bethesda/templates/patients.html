@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Patients{% endblock %}
+{% block content %}
+<div class="row"><h1>Patients</h1><a class="btn right" href="{{ url_for('patient_new') }}">+ Register Patient</a></div>
+<form class="filters"><div style="min-width:300px"><label>Search</label><input name="q" value="{{ q }}" placeholder="Name, phone or patient ID" autofocus></div><div><button class="btn">Search</button></div></form>
+<div class="tablewrap"><table>
+<tr><th>Patient ID</th><th>Name</th><th>Age / Gender</th><th>Phone</th><th>Visits</th><th>Last visit</th><th></th></tr>
+{% for p in rows %}
+<tr><td>{{ p.patient_no }}</td><td><a href="{{ url_for('patient_detail', pid=p.id) }}">{{ p.name }}</a></td>
+<td>{{ p.age if p.age is not none else '-' }} {{ p.age_unit if p.age is not none }} / {{ p.gender or '-' }}</td><td>{{ p.phone or '' }}</td>
+<td>{{ p.visit_count }}</td><td class="small">{{ (p.last_visit or '')[:10] }}</td>
+<td><a class="btn sm" href="{{ url_for('visit_new', patient_id=p.id) }}">New visit</a></td></tr>
+{% else %}<tr><td colspan="7" class="muted">No patients found.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

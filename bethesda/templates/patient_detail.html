@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}{{ p.name }}{% endblock %}
+{% block content %}
+<div class="row"><h1>{{ p.name }} <span class="muted small">{{ p.patient_no }}</span></h1>
+  <div class="right row"><a class="btn sec" href="{{ url_for('patient_edit', pid=p.id) }}">Edit</a><a class="btn" href="{{ url_for('visit_new', patient_id=p.id) }}">+ New visit</a></div></div>
+<div class="card grid g4">
+  <div><label>Age / Gender</label>{{ p.age if p.age is not none else '-' }} {{ p.age_unit if p.age is not none }} / {{ p.gender or '-' }}</div>
+  <div><label>Phone</label>{{ p.phone or '-' }}</div><div><label>Email</label>{{ p.email or '-' }}</div><div><label>Address</label>{{ p.address or '-' }}</div>
+</div>
+<h2>Visit history</h2>
+{% set rows = visits %}{% include "_visit_rows.html" %}
+{% endblock %}

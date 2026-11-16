@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="row"><h1>Dashboard</h1><span class="right muted">{{ today }}</span></div>
+<div class="grid g6">
+  <div class="stat"><div class="k">Visits today</div><div class="v">{{ stats.visits }}</div></div>
+  <div class="stat"><div class="k">Billed today</div><div class="v">{{ settings.currency }} {{ stats.billed|money }}</div></div>
+  <div class="stat"><div class="k">Collected today</div><div class="v">{{ settings.currency }} {{ stats.collected|money }}</div></div>
+  <div class="stat"><div class="k">Pending reports</div><div class="v"><a href="{{ url_for('visits', status='Registered') }}">{{ pending }}</a></div></div>
+  <div class="stat"><div class="k">Patient dues</div><div class="v">{{ settings.currency }} {{ dues|money }}</div></div>
+  <div class="stat"><div class="k">Unpaid commission</div><div class="v"><a href="{{ url_for('commissions', status='unpaid') }}">{{ settings.currency }} {{ unpaid_comm|money }}</a></div></div>
+</div>
+<div class="card" style="margin-top:16px">
+  <b>This month:</b> {{ mstats.visits }} visits · {{ settings.currency }} {{ mstats.billed|money }} billed ·
+  Self: {{ mstats.self_n or 0 }} · Doctor referred: {{ mstats.doc_n or 0 }} · Hospital referred: {{ mstats.hosp_n or 0 }}
+</div>
+<div class="row"><h2>Recent visits</h2><a class="right" href="{{ url_for('visits') }}">All visits →</a></div>
+{% set rows = recent %}{% include "_visit_rows.html" %}
+{% endblock %}

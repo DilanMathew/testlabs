@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% block title %}Results {{ v.visit_no }}{% endblock %}
+{% block content %}
+<div class="row"><h1>Enter results · {{ v.visit_no }}</h1><a class="right" href="{{ url_for('visit_detail', vid=v.id) }}">← back to visit</a></div>
+<div class="card"><b>{{ v.patient_name }}</b> · {{ v.age if v.age is not none else '-' }} {{ v.age_unit if v.age is not none }} / {{ v.gender or 'gender not set' }} · Ref: {{ referred_by(v) }}
+  {% if not v.gender %}<div class="small flagH">Gender is not set – female-specific reference ranges will not be applied. <a href="{{ url_for('patient_edit', pid=v.patient_id) }}">Edit patient</a></div>{% endif %}
+  <div class="small muted">Values outside the reference range turn red (high) or blue (low) as you type. Leave blank any parameter that was not done – it will be left out of the report.</div></div>
+<form method="post">
+{% for s in sections %}
+<div class="card res">
+  <h3 style="margin-top:0">{{ s.name }} <span class="small muted">{{ s.code }} · {{ s.sample_type or '' }}</span></h3>
+  <table>
+  <tr><th style="width:32%">Parameter</th><th style="width:24%">Result</th><th style="width:12%">Unit</th><th>Reference range</th></tr>
+  {% for r in s.rows %}
+  <tr>
+    <td>{{ r.name }}</td>
+    <td>
+      <input name="p_{{ r.pid }}" value="{{ r.value or '' }}" class="rv" autocomplete="off"
+        data-low="{{ r.low|num }}" data-high="{{ r.high|num }}" data-normal="{{ r.normal_value }}"
+        {% if r.options %}list="opt{{ r.pid }}"{% endif %}>
+      {% if r.options %}<datalist id="opt{{ r.pid }}">{% for o in r.options.split('|') %}<option value="{{ o }}">{% endfor %}</datalist>{% endif %}
+    </td>
+    <td class="small">{{ r.unit }}</td>
+    <td class="rng">{{ r.range }}</td>
+  </tr>
+  {% endfor %}
+  </table>
+</div>
+{% else %}<div class="card muted">This visit has no tests.</div>{% endfor %}
+<div class="card"><label>Remarks / interpretation (printed on report)</label><textarea name="remarks" rows="3">{{ v.remarks or '' }}</textarea></div>
+<div class="row"><button class="btn sec" name="action" value="draft">Save draft</button>
+  <button class="btn" name="action" value="complete">Save & mark report completed</button></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function check(i){
+  i.classList.remove('H','L','A'); const v = i.value.trim(); if (!v) return;
+  const n = parseFloat(v.replace(/,/g,'')), lo = i.dataset.low, hi = i.dataset.high;
+  if (!isNaN(n) && /^[-+]?[\d.,]+$/.test(v) && (lo!=='' || hi!=='')){
+    if (lo!=='' && n < +lo) i.classList.add('L'); else if (hi!=='' && n > +hi) i.classList.add('H');
+  } else if (i.dataset.normal && norm(v)!==norm(i.dataset.normal)) i.classList.add('A');
+}
+document.querySelectorAll('.rv').forEach(i => { check(i); i.addEventListener('input', () => check(i)); });
+</script>
+{% endblock %}

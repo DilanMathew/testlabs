@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block title %}Doctor{% endblock %}
+{% block content %}
+<h1>{{ 'Edit doctor' if d else 'Add doctor' }}</h1>
+<form method="post" class="card">
+<div class="grid g3">
+  <div><label>Name *</label><input name="name" required value="{{ d.name if d else '' }}" placeholder="Dr. Full Name"></div>
+  <div><label>Qualification</label><input name="qualification" value="{{ d.qualification or '' if d else '' }}" placeholder="MBBS, MD"></div>
+  <div><label>Specialization</label><input name="specialization" value="{{ d.specialization or '' if d else '' }}" placeholder="General Physician"></div>
+  <div><label>Medical registration no.</label><input name="registration_no" value="{{ d.registration_no or '' if d else '' }}"></div>
+  <div><label>Phone</label><input name="phone" value="{{ d.phone or '' if d else '' }}"></div>
+  <div><label>Email</label><input name="email" value="{{ d.email or '' if d else '' }}"></div>
+  <div><label>Attached hospital (optional)</label><select name="hospital_id"><option value="">— none / own clinic —</option>
+    {% for h in hospitals %}<option value="{{ h.id }}" {{ 'selected' if d and d.hospital_id==h.id }}>{{ h.name }}</option>{% endfor %}</select></div>
+  <div><label>Commission % on referred bills</label><input type="number" step="0.01" min="0" name="commission_pct" value="{{ d.commission_pct|num if d else settings.default_doctor_commission }}"></div>
+  <div><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" name="active" {{ 'checked' if not d or d.active }}> Active</label></div>
+</div>
+<div class="row" style="margin-top:14px"><button class="btn">Save</button><a class="btn sec" href="{{ url_for('doctors') }}">Cancel</a></div>
+</form>
+{% endblock %}

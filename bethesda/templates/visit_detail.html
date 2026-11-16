@@ -1,0 +1,56 @@
+{% extends "base.html" %}{% block title %}{{ v.visit_no }}{% endblock %}
+{% block content %}
+<div class="row"><h1>Visit {{ v.visit_no }}</h1><span class="badge b-{{ v.status|replace(' ','') }}">{{ v.status }}</span>
+  <div class="right row">
+    <a class="btn sec" href="{{ url_for('visit_edit', vid=v.id) }}">Edit tests / billing</a>
+    <a class="btn sec" target="_blank" href="{{ url_for('receipt_pdf', vid=v.id) }}">Receipt PDF</a>
+    <a class="btn" href="{{ url_for('results', vid=v.id) }}">Enter results</a>
+    <a class="btn" target="_blank" href="{{ url_for('report_pdf', vid=v.id) }}">Report PDF</a>
+  </div>
+</div>
+<div class="grid g3">
+  <div class="card"><h3 style="margin-top:0">Patient</h3>
+    <a href="{{ url_for('patient_detail', pid=v.patient_id) }}"><b>{{ v.patient_name }}</b></a> ({{ v.patient_no }})<br>
+    {{ v.age if v.age is not none else '-' }} {{ v.age_unit if v.age is not none }} / {{ v.gender or '-' }} · {{ v.patient_phone or '' }}<br>
+    <span class="small muted">Registered {{ v.visit_date }}{% if v.sample_collected_at %}<br>Sample collected {{ v.sample_collected_at }}{% endif %}{% if v.reported_at %}<br>Reported {{ v.reported_at }}{% endif %}</span>
+    {% if v.clinical_notes %}<p class="small"><b>Notes:</b> {{ v.clinical_notes }}</p>{% endif %}
+  </div>
+  <div class="card"><h3 style="margin-top:0">Referral & commission</h3>
+    <span class="badge b-{{ v.referral_type }}">{{ v.referral_type }}</span> {{ referred_by(v) }}
+    <table style="margin-top:8px">
+    {% if v.doctor_id %}<tr><td>Doctor ({{ v.doctor_commission_pct|num }}%)</td><td class="r">{{ v.doctor_commission|money }}</td><td>{{ ('Paid ' ~ v.doctor_commission_paid_on) if v.doctor_commission_paid_on else 'Unpaid' }}</td></tr>{% endif %}
+    {% if v.hospital_id %}<tr><td>Hospital ({{ v.hospital_commission_pct|num }}%)</td><td class="r">{{ v.hospital_commission|money }}</td><td>{{ ('Paid ' ~ v.hospital_commission_paid_on) if v.hospital_commission_paid_on else 'Unpaid' }}</td></tr>{% endif %}
+    {% if not v.doctor_id and not v.hospital_id %}<tr><td class="muted">No commission (self / walk-in)</td></tr>{% endif %}
+    </table>
+  </div>
+  <div class="card"><h3 style="margin-top:0">Billing</h3>
+    <div class="row"><span>Gross</span><span class="right">{{ v.gross_amount|money }}</span></div>
+    <div class="row"><span>Discount</span><span class="right">- {{ v.discount|money }}</span></div>
+    <div class="row"><b>Net</b><b class="right">{{ settings.currency }} {{ v.net_amount|money }}</b></div>
+    <div class="row"><span>Paid ({{ v.payment_mode or '-' }})</span><span class="right">{{ v.paid_amount|money }}</span></div>
+    {% set due = v.net_amount - v.paid_amount %}
+    {% if due > 0.009 %}
+    <div class="row"><b class="flagH">Balance due</b><b class="right flagH">{{ due|money }}</b></div>
+    <form method="post" action="{{ url_for('visit_payment', vid=v.id) }}" class="row" style="margin-top:8px;flex-wrap:nowrap">
+      <input type="number" step="0.01" name="amount" value="{{ '%.2f'|format(due) }}">
+      <select name="payment_mode">{% for m in ['Cash','UPI','Card','Bank Transfer','Insurance'] %}<option>{{ m }}</option>{% endfor %}</select>
+      <button class="btn sm">Collect</button></form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="row"><h3 style="margin:0">Tests ({{ tests|length }}) · {{ n_results }} values entered</h3>
+    <form method="post" action="{{ url_for('visit_status', vid=v.id) }}" class="right row">
+      {% if v.status=='Registered' %}<button class="btn sm sec" name="status" value="Sample Collected">Mark sample collected</button>{% endif %}
+      {% if v.status=='Completed' %}<button class="btn sm sec" name="status" value="Sample Collected">Re-open for editing</button>{% endif %}
+    </form></div>
+  <div class="tablewrap" style="margin-top:10px"><table>
+    <tr><th>Code</th><th>Test</th><th>Category</th><th>Sample</th><th>Package</th><th class="r">Price</th></tr>
+    {% for p in pkgs %}<tr><td colspan="4"><b>Package: {{ p.name }}</b></td><td></td><td class="r">{{ p.price|money }}</td></tr>{% endfor %}
+    {% for t in tests %}<tr><td>{{ t.code }}</td><td>{{ t.name }}</td><td>{{ t.category }}</td><td>{{ t.sample_type or '' }}</td><td class="small muted">{{ t.package_name or '' }}</td><td class="r">{{ t.price|money if not t.visit_package_id else '—' }}</td></tr>{% endfor %}
+  </table></div>
+</div>
+<form method="post" action="{{ url_for('visit_delete', vid=v.id) }}" onsubmit="return confirm('Permanently delete this visit, its results and commission records?')">
+  <button class="btn danger sm">Delete visit</button></form>
+{% endblock %}

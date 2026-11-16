@@ -1,0 +1,9 @@
+<div class="grid g4">
+  <div style="grid-column:span 2"><label>Full name *</label><input name="name" required value="{{ p.name or '' }}"></div>
+  <div><label>Age</label><div class="row" style="flex-wrap:nowrap"><input type="number" min="0" name="age" value="{{ p.age if p.age is not none else '' }}">
+    <select name="age_unit">{% for u in ['Years','Months','Days'] %}<option {{ 'selected' if p.age_unit==u }}>{{ u }}</option>{% endfor %}</select></div></div>
+  <div><label>Gender</label><select name="gender"><option value="">-</option>{% for g in ['Male','Female','Other'] %}<option {{ 'selected' if p.gender==g }}>{{ g }}</option>{% endfor %}</select></div>
+  <div><label>Phone</label><input name="phone" value="{{ p.phone or '' }}"></div>
+  <div><label>Email</label><input name="email" type="email" value="{{ p.email or '' }}"></div>
+  <div style="grid-column:span 2"><label>Address</label><input name="address" value="{{ p.address or '' }}"></div>
+</div>

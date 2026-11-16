@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}Tests{% endblock %}
+{% block content %}
+<div class="row"><h1>Test catalog</h1><a class="btn right" href="{{ url_for('test_form') }}">+ Add test</a></div>
+<form class="filters"><div style="min-width:300px"><label>Search</label><input name="q" value="{{ q }}" placeholder="Name, code or category"></div><div><button class="btn">Search</button></div></form>
+<p class="small muted">Edit any test to change its price or reference ranges. ⚠ Default ranges are typical adult values – verify them against your analyser/kit inserts before issuing reports.</p>
+<div class="tablewrap"><table>
+<tr><th>Code</th><th>Name</th><th>Category</th><th>Sample</th><th class="r">Parameters</th><th class="r">Price</th><th></th></tr>
+{% for t in rows %}<tr class="{{ 'muted' if not t.active }}"><td>{{ t.code }}</td><td><b>{{ t.name }}</b>{{ ' (fasting)' if t.fasting }}{% if not t.active %} <span class="badge b-Self">inactive</span>{% endif %}</td>
+<td>{{ t.category }}</td><td>{{ t.sample_type or '' }}</td><td class="r">{{ t.n_params }}</td><td class="r">{{ t.price|money }}</td>
+<td><a class="btn sm sec" href="{{ url_for('test_form', tid=t.id) }}">Edit</a></td></tr>{% endfor %}
+</table></div>
+{% endblock %}

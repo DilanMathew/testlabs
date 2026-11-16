@@ -1,0 +1,142 @@
+{% extends "base.html" %}{% block title %}{{ 'Edit visit' if visit else 'New visit' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit visit ' ~ visit.visit_no if visit else 'New visit / sample registration' }}</h1>
+<form method="post" id="vf">
+<div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(280px,1fr);align-items:start">
+<div>
+  <div class="card">
+    <h3 style="margin-top:0">1. Patient</h3>
+    {% if patient %}
+      <input type="hidden" name="patient_id" value="{{ patient.id }}">
+      <input type="hidden" id="pgender" value="{{ patient.gender or '' }}">
+      <b>{{ patient.name }}</b> · {{ patient.patient_no }} · {{ patient.age if patient.age is not none else '-' }} {{ patient.age_unit if patient.age is not none }} / {{ patient.gender or '-' }} · {{ patient.phone or '' }}
+      {% if not visit %}<a class="small" href="{{ url_for('visit_new') }}" style="margin-left:10px">change</a>{% endif %}
+    {% else %}
+      <p class="small muted" style="margin-top:0">Returning patient? <a href="{{ url_for('patients') }}">Search patients</a> and click “New visit”. Otherwise enter details below.</p>
+      {% set p = request.form if request.method=='POST' else {} %}
+      {% include "_patient_fields.html" %}
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">2. How did the patient come to us?</h3>
+    {% set rt = request.form.referral_type or (visit.referral_type if visit else 'Self') %}
+    <div class="radio-row">
+      {% for t, lbl in [('Self','Self / Walk-in'),('Doctor','Referred by Doctor'),('Hospital','Referred by Hospital')] %}
+      <label><input type="radio" name="referral_type" value="{{ t }}" {{ 'checked' if rt==t }}> {{ lbl }}</label>
+      {% endfor %}
+    </div>
+    <div class="grid g2" style="margin-top:12px">
+      <div id="hospbox"><label>Hospital</label>
+        <select name="hospital_id" id="hospital_id"><option value="">— select hospital —</option>
+        {% for h in hospitals %}<option value="{{ h.id }}" data-pct="{{ h.commission_pct|num }}" {{ 'selected' if visit and visit.hospital_id==h.id }}>{{ h.name }} ({{ h.commission_pct|num }}%)</option>{% endfor %}
+        </select>
+        <div class="small muted" style="margin-top:4px">Hospital commission %</div>
+        <input name="hospital_commission_pct" id="hpct" type="number" step="0.01" min="0" value="{{ visit.hospital_commission_pct|num if visit and visit.hospital_id else '' }}">
+      </div>
+      <div id="docbox"><label>Doctor <span id="docopt" class="muted">(optional – treating doctor at hospital)</span></label>
+        <select name="doctor_id" id="doctor_id"><option value="">— select doctor —</option>
+        {% for d in doctors %}<option value="{{ d.id }}" data-pct="{{ d.commission_pct|num }}" data-hosp="{{ d.hospital_id or '' }}" {{ 'selected' if visit and visit.doctor_id==d.id }}>{{ d.name }}{{ ' – ' ~ d.specialization if d.specialization }}{{ ' @ ' ~ d.hospital_name if d.hospital_name }} ({{ d.commission_pct|num }}%)</option>{% endfor %}
+        </select>
+        <div class="small muted" style="margin-top:4px">Doctor commission %</div>
+        <input name="doctor_commission_pct" id="dpct" type="number" step="0.01" min="0" value="{{ visit.doctor_commission_pct|num if visit and visit.doctor_id else '' }}">
+      </div>
+    </div>
+    <p class="small muted" style="margin-bottom:0">Commission is calculated on the net bill (after discount). Not listed? <a href="{{ url_for('doctor_form') }}" target="_blank">Add doctor</a> · <a href="{{ url_for('hospital_form') }}" target="_blank">Add hospital</a> (then reload).</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">3. Tests requested</h3>
+    {% if packages %}
+    <label>Packages</label>
+    <div class="testpick" style="max-height:none;margin-bottom:12px">
+      {% for pk in packages %}
+      <label class="item"><input type="checkbox" class="pkg" name="package_ids" value="{{ pk.id }}" data-price="{{ pk.price }}" data-tests="{{ pk.test_ids or '' }}" data-name="{{ pk.name }}" {{ 'checked' if pk.id in sel_pkgs }}>
+        <span><b>{{ pk.name }}</b><br><span class="small muted">{{ pk.test_codes }}</span></span><span class="price">{{ settings.currency }} {{ pk.price|money }}</span></label>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="row" style="margin-bottom:8px"><input id="tsearch" placeholder="Search tests by name, code or category…" style="flex:1"><label style="margin:0"><input type="checkbox" id="onlysel"> show selected only</label></div>
+    <div class="testpick" id="tlist">
+      {% set ns = namespace(cat='') %}
+      {% for t in tests %}
+        {% if t.category != ns.cat %}{% set ns.cat = t.category %}<div class="cat">{{ t.category }}</div>{% endif %}
+        <label class="item" data-s="{{ (t.name ~ ' ' ~ t.code ~ ' ' ~ t.category)|lower }}">
+          <input type="checkbox" class="tst" name="test_ids" value="{{ t.id }}" data-price="{{ t.price }}" data-name="{{ t.name }}" {{ 'checked' if t.id in sel_tests }}>
+          <span>{{ t.name }} <span class="small muted">{{ t.code }}{{ ' · fasting' if t.fasting }} · {{ t.sample_type or '' }}</span></span>
+          <span class="price">{{ settings.currency }} {{ t.price|money }}</span>
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="card billbox">
+  <h3 style="margin-top:0">4. Bill</h3>
+  <div id="lines" class="small"></div>
+  <hr>
+  <div class="row"><span>Gross</span><span class="right" id="gross">0.00</span></div>
+  <div style="margin-top:8px"><label>Discount ({{ settings.currency }})</label><input type="number" step="0.01" min="0" name="discount" id="discount" value="{{ visit.discount|num if visit else (request.form.discount or 0) }}"></div>
+  <div class="row" style="margin-top:8px"><span>Net payable</span><span class="right total"><span class="small">{{ settings.currency }}</span> <span id="net">0.00</span></span></div>
+  <div class="small muted" id="commline"></div>
+  <div style="margin-top:8px"><label>Amount paid now ({{ settings.currency }})</label><input type="number" step="0.01" min="0" name="paid_amount" id="paid" value="{{ visit.paid_amount|num if visit else (request.form.paid_amount or '') }}"><a href="#" class="small" id="fullpay">pay full amount</a></div>
+  <div style="margin-top:8px"><label>Payment mode</label><select name="payment_mode">{% for m in ['Cash','UPI','Card','Bank Transfer','Insurance','Credit'] %}<option {{ 'selected' if visit and visit.payment_mode==m }}>{{ m }}</option>{% endfor %}</select></div>
+  <div style="margin-top:8px"><label>Visit date & time</label><input type="datetime-local" name="visit_date" value="{{ visit.visit_date.replace(' ','T')[:16] if visit else '' }}"><div class="small muted">Leave empty for now</div></div>
+  <div style="margin-top:8px"><label>Clinical notes / symptoms</label><textarea name="clinical_notes" rows="2">{{ visit.clinical_notes if visit and visit.clinical_notes else '' }}</textarea></div>
+  <button class="btn" style="width:100%;margin-top:12px;padding:10px">{{ 'Save changes' if visit else 'Register visit' }}</button>
+</div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const fmt = n => n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+function refUI(){
+  const rt = $('input[name=referral_type]:checked').value;
+  $('#hospbox').classList.toggle('hidden', rt!=='Hospital');
+  $('#docbox').classList.toggle('hidden', rt==='Self');
+  $('#docopt').classList.toggle('hidden', rt!=='Hospital');
+  calc();
+}
+function pctFrom(sel, input){ const o = sel.selectedOptions[0]; input.value = (o && o.value) ? o.dataset.pct : ''; }
+$('#doctor_id').addEventListener('change', e => {
+  pctFrom(e.target, $('#dpct'));
+  const h = e.target.selectedOptions[0].dataset.hosp;
+  if (h && $('input[name=referral_type]:checked').value==='Hospital' && !$('#hospital_id').value){ $('#hospital_id').value=h; pctFrom($('#hospital_id'), $('#hpct')); }
+  calc();
+});
+$('#hospital_id').addEventListener('change', e => { pctFrom(e.target, $('#hpct')); calc(); });
+$$('input[name=referral_type]').forEach(r => r.addEventListener('change', refUI));
+function calc(){
+  const covered = new Set(); let gross = 0, lines = [];
+  $$('.pkg:checked').forEach(p => { gross += +p.dataset.price; lines.push([ 'Pkg: '+p.dataset.name, +p.dataset.price]);
+     p.dataset.tests.split(',').filter(Boolean).forEach(t => covered.add(t)); });
+  $$('.tst').forEach(t => {
+    const c = covered.has(t.value); t.closest('label').classList.toggle('covered', c);
+    if (t.checked && !c){ gross += +t.dataset.price; lines.push([t.dataset.name, +t.dataset.price]); }
+  });
+  $('#lines').innerHTML = lines.length ? lines.map(l => `<div class="row"><span>${l[0]}</span><span class="right">${fmt(l[1])}</span></div>`).join('') : '<span class="muted">No tests selected</span>';
+  const disc = Math.min(Math.max(+$('#discount').value || 0, 0), gross), net = gross - disc;
+  $('#gross').textContent = fmt(gross); $('#net').textContent = fmt(net);
+  const rt = $('input[name=referral_type]:checked').value; let cl = [];
+  if (rt!=='Self' && $('#doctor_id').value) cl.push('Doctor: '+fmt(net*(+$('#dpct').value||0)/100));
+  if (rt==='Hospital' && $('#hospital_id').value) cl.push('Hospital: '+fmt(net*(+$('#hpct').value||0)/100));
+  $('#commline').textContent = cl.length ? 'Commission → '+cl.join(' · ') : '';
+  return net;
+}
+document.addEventListener('change', calc); document.addEventListener('input', calc);
+$('#fullpay').addEventListener('click', e => { e.preventDefault(); $('#paid').value = calc().toFixed(2); });
+function filt(){
+  const q = $('#tsearch').value.toLowerCase().trim(), only = $('#onlysel').checked;
+  $$('#tlist label.item').forEach(l => { const sel = l.querySelector('input').checked;
+    l.classList.toggle('hidden', (q && !l.dataset.s.includes(q)) || (only && !sel)); });
+  $$('#tlist .cat').forEach(c => { let n = c.nextElementSibling, any = false;
+    while (n && !n.classList.contains('cat')) { if (!n.classList.contains('hidden')) any = true; n = n.nextElementSibling; }
+    c.classList.toggle('hidden', !any); });
+}
+$('#tsearch').addEventListener('input', filt); $('#onlysel').addEventListener('change', filt);
+$('#tsearch').addEventListener('keydown', e => { if (e.key==='Enter') e.preventDefault(); });
+refUI();
+</script>
+{% endblock %}
