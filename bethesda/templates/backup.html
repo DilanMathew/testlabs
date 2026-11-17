@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block title %}Backup{% endblock %}
+{% block content %}
+<h1>Backup &amp; restore</h1>
+{% include "_admin_tabs.html" %}
+<div class="card">
+  {% if health.ok %}<div class="lockbar">✔ Backups are working. Last on this PC: {{ health.local_last }} · Last external: {{ health.external_last }}</div>
+  {% else %}<div class="flash error">{% for p in health.problems %}<div>{{ p }}</div>{% endfor %}</div>{% endif %}
+  <p>The software backs up automatically <b>once a day</b> while it is running, to this PC and to the external folder below. The last {{ settings.backup_keep }} backups are kept in each place.</p>
+  <form method="post" class="grid" style="grid-template-columns:minmax(0,3fr) minmax(0,1fr) auto;align-items:end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label>External backup folder (USB drive or a Google Drive / OneDrive folder)</label>
+      <input name="backup_dir" value="{{ settings.backup_dir }}" placeholder="e.g. E:\BethesdaBackup  or  C:\Users\Lab\Google Drive\BethesdaBackup"></div>
+    <div><label>Backups to keep</label><input type="number" name="backup_keep" min="3" max="365" value="{{ settings.backup_keep }}"></div>
+    <div><button class="btn">Save</button></div>
+  </form>
+  <form method="post" action="{{ url_for('backup_now') }}" style="margin-top:12px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn">Back up now</button></form>
+  <p class="small muted">Data file: <code>{{ db_path }}</code>. Take the USB drive home once a week so a fire or theft at the lab cannot destroy both copies.</p>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0">Monthly check message</h3>
+  <p class="small muted">Copy this and send it on WhatsApp as the monthly support update.</p>
+  <textarea id="summary" class="mono" rows="6" readonly>{{ summary }}</textarea>
+  <button class="btn sm sec" style="margin-top:6px" onclick="navigator.clipboard.writeText(document.getElementById('summary').value);this.textContent='Copied ✔'">Copy</button>
+</div>
+
+<h2>Available backups</h2>
+<div class="tablewrap"><table>
+<tr><th>Saved on</th><th>Where</th><th>File</th><th class="r">Size</th><th></th></tr>
+{% for b in backups %}<tr><td>{{ b.when }}</td><td>{{ b.where }}</td><td class="small">{{ b.name }}</td><td class="r">{{ b.size_kb }} KB</td>
+<td class="row">
+  <a class="btn sm sec" href="{{ url_for('backup_download', name=b.name, where=b.where) }}">Download</a>
+  <form method="post" action="{{ url_for('backup_restore') }}" class="row" onsubmit="return confirm('Replace ALL current data with this backup from {{ b.when }}? A safety copy of the current data is saved first.')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="name" value="{{ b.name }}"><input type="hidden" name="where" value="{{ b.where }}">
+    <input name="confirm" placeholder="type RESTORE" style="width:110px" required><button class="btn sm danger">Restore</button>
+  </form>
+</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No backups yet. Click “Back up now”.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

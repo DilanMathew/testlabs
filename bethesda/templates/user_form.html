@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}User{% endblock %}
+{% block content %}
+<h1>{{ 'Edit user' if u else 'Add user' }}</h1>
+{% include "_admin_tabs.html" %}
+<form method="post" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="grid g3">
+    <div><label>Full name *</label><input name="full_name" required value="{{ u.full_name if u else request.form.full_name or '' }}"></div>
+    <div><label>Username *</label><input name="username" required value="{{ u.username if u else request.form.username or '' }}"></div>
+    <div><label>Role</label><select name="role">{% for k, lbl in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if (u and u.role==k) or (not u and k=='technician') }}>{{ lbl }}</option>{% endfor %}</select></div>
+    <div><label>{{ 'New password (leave empty to keep)' if u else 'Password * (min 6 characters)' }}</label><input type="password" name="password" autocomplete="new-password" {{ '' if u else 'required' }}></div>
+    <div><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" name="active" {{ 'checked' if not u or u.active }}> Active (untick when someone leaves)</label></div>
+  </div>
+  <div class="row" style="margin-top:14px"><button class="btn">Save</button><a class="btn sec" href="{{ url_for('users') }}">Cancel</a></div>
+</form>
+{% endblock %}

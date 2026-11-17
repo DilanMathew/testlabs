@@ -1,76 +1,108 @@
-# Bethesda Labs – Lab Management (runs offline on your computer)
+# Bethesda Labs – Lab Management Software (offline)
 
-A local application for a blood-collection / pathology lab:
+Desktop software for a blood-collection / pathology lab. It runs on the lab's own Windows PC, needs no internet, and keeps all data on that PC.
 
-- **Patient registration and visits** with auto-generated Patient IDs (`P-YYYYMMDD-0001`) and Visit/Sample numbers (`BL-YYYYMMDD-0001`)
-- **Referral tracking** for every visit: *Self / Walk-in*, *Referred by Doctor*, or *Referred by Hospital* (optionally with the treating doctor)
-- **Commissions**: a % per doctor and per hospital, calculated on the net bill and editable per visit. Includes statements per doctor/hospital, mark paid/unpaid, and CSV export for Excel
-- **Test catalog** of 56 common tests in 8 categories (Haematology, Coagulation, Diabetes, Biochemistry, Cardiac, Hormones, Immunology/Serology, Clinical Pathology) with parameters, units, prices and male/female reference ranges, plus 4 health packages. All of it is editable
-- **Billing**: packages and individual tests, discount, part-payment, balance due, payment mode, and a receipt PDF
-- **Result entry**: values turn red (high) or blue (low) as you type
-- **PDF report**: each actual value next to its reference (safe) range, H/L flags, a colour bar showing where the result falls, a summary of out-of-range values, and pathologist signature lines
-- **Dashboard**: daily visits, billing, collections, pending reports, patient dues and unpaid commissions
-- **One-click backup** of the database
-
-Everything is stored in one file, `data/bethesda.db`, on your computer. No internet is needed.
+**Features**
+- Patient registration and visits, with automatic Patient IDs and Visit/Sample numbers
+- Referral tracking: Self / Doctor / Hospital, with doctor and hospital **commissions**, statements, paid/unpaid tracking and Excel export
+- 56 common tests and 4 health packages, with prices and male/female reference ranges (all editable)
+- Billing, discounts, part-payments and a receipt PDF
+- Result entry with automatic High/Low flags
+- **Report approval workflow**: the technician enters results, the doctor approves, and the report is **locked**. Corrections create an **amended version** with a reason; old versions are kept.
+- PDF report with the lab **logo**, the pathologist's **signature**, results vs normal range, range bars and a summary of abnormal values. Unapproved reports print with a **DRAFT** watermark.
+- **Logins** for the doctor/owner (full access) and technicians (no access to money, commissions or settings), with an **activity log** of who did what
+- **Automatic daily backup** to this PC and to a USB drive or cloud folder, plus one-click restore
+- **Licence key** with expiry and grace period. An expired licence only pauses *new* registrations; old data always stays available.
+- Runs like a normal app: desktop icon, its own window, tray icon, starts with Windows
 
 ---
 
-## 1. Install (one time)
+## A. Installing at the lab (Windows)
 
-1. Install **Python 3.10 or newer** from <https://www.python.org/downloads/>.
-   *Windows:* tick **"Add Python to PATH"** during installation.
-2. Download this project (GitHub → **Code → Download ZIP**) and unzip it, for example to `C:\BethesdaLabs`.
+1. Get the installer `BethesdaLabs-Setup-x.y.z.exe` (see section D).
+2. Double-click it. Windows may show **"Windows protected your PC"**, because the installer is not code-signed: click **More info → Run anyway**.
+3. Keep both options ticked: **Desktop icon** and **Start automatically when Windows starts**. Auto-start keeps the daily backup running.
+4. Bethesda Labs opens in its own window. Its icon (red drop) sits in the system tray near the clock. Right-click it for **Open / Back up now / Quit**.
 
-## 2. Start the application
+The data lives in `C:\ProgramData\BethesdaLabs` and is **kept if the software is uninstalled or updated**.
 
-- **Windows:** double-click **`start_windows.bat`**
-- **Mac / Linux:** open Terminal in the folder and run `./start_mac_linux.sh`
+**Updating:** run the newer installer over the old one. The data is untouched.
 
-The first start takes about a minute because it installs the requirements. After that it starts in seconds and opens your browser at **http://127.0.0.1:5000**.
-Keep the black console window open while you work, and close it to stop the app.
+### First-time setup (inside the app)
+1. Create the **doctor / owner** account. This name is printed as "approved by" on reports.
+2. **Admin → Lab settings & logo**: lab name, address and pathologist, then upload the **logo** and **signature**. For the signature, sign on white paper, photograph it and crop it tightly.
+3. **Admin → Backup & restore**: set the external folder (for example `E:\BethesdaBackup` on a USB drive that stays plugged in, or a Google Drive/OneDrive folder), then click **Back up now** to test it.
+4. **Admin → Users**: add a login for each technician or receptionist.
+5. **Hospitals / Doctors**: add referrers and their commission %.
+6. **Tests**: check prices, and have the pathologist **verify every reference range** against the lab's analyser and reagent kit inserts.
+7. **Admin → Licence**: install the licence file from the developer. A 30-day trial runs until then.
 
-> Tip (Windows): right-click `start_windows.bat` → *Send to → Desktop (create shortcut)* to get a desktop icon.
+### Other PCs in the lab (optional)
+Tick **Admin → Lab settings → Allow other computers…**, then restart the software (tray icon → Quit, then open it again). Other PCs open `http://<main-PC-IP>:5000` in Edge or Chrome. Allow the app through the Windows firewall if asked.
 
-### Use it from several computers in the lab
-Run `start_windows.bat --lan` (or `./start_mac_linux.sh --lan`) on the main PC. Other PCs on the same Wi-Fi/LAN can then open `http://<main-PC-IP>:5000`. Allow Python through the Windows firewall when Windows asks.
+## B. Daily workflow
+1. **+ New Visit**: patient, referral (Self / Doctor / Hospital), tests or package, discount, payment → **Receipt PDF**.
+2. **Mark sample collected**.
+3. Technician: **Enter results → Save & send for approval**.
+4. Doctor: **Review & approve → Save & approve report**. The report is locked and the **Report PDF** is final.
+5. Wrong value after approval? Doctor: **Amend report** (with a reason) → correct → approve again. This prints as "Amended report, Version 2"; version 1 stays in the history.
+6. Doctor: **Commissions** → filter by month → pay → **Mark selected as paid** / **Export CSV**.
 
-## 3. First-time setup (inside the app)
+| | Doctor / Owner | Technician / Reception |
+|---|---|---|
+| Register patients, billing, receipts | ✔ | ✔ |
+| Enter results, send for approval | ✔ | ✔ |
+| Approve / amend reports | ✔ | ✖ |
+| Commissions, doctors, hospitals, income figures | ✔ | ✖ |
+| Change prices, tests, packages, settings, users, backup, licence | ✔ | ✖ |
 
-1. **Settings**: lab name, address, phone, pathologist name and qualification, report footer, currency.
-2. **Hospitals** → add the hospitals/clinics that refer patients, with their commission %.
-3. **Doctors** → add the referring doctors, with their commission % and, optionally, their hospital.
-4. **Tests**: check prices and **verify every reference range against your analyser/reagent kit inserts**. The defaults are typical adult values.
-5. **Packages**: adjust or add health packages.
+## C. Backups and restore
+- An automatic backup runs every day while the software is running, to `C:\ProgramData\BethesdaLabs\backups` **and** the external folder. The last 30 are kept in each.
+- The dashboard shows a red warning if a backup has not worked for 2 days (for example, the USB drive was unplugged).
+- **Admin → Backup & restore → Restore**: pick a backup and type `RESTORE`. A safety copy of the current data is saved first.
+- Take the USB drive home once a week.
+- **Monthly check message**: copy it from the Backup page and send it on WhatsApp as your monthly support update.
 
-## 4. Daily workflow
+---
 
-1. **+ New Visit**: enter the patient (or find a returning patient under *Patients → New visit*), choose how they came (Self / Doctor / Hospital), tick the tests or a package, add any discount and the amount paid, then **Register visit**. Print the **Receipt PDF** if needed.
-2. Collect the sample → **Mark sample collected**.
-3. When the analysis is done → **Enter results** → **Save & mark report completed**.
-4. **Report PDF**: print it, or save it and send it to the patient or doctor.
-5. **Commissions**: filter by month and doctor/hospital, review the statement, pay, then select the rows → **Mark selected as paid**. Use **Export CSV** to open it in Excel.
+## D. For the developer
 
-## 5. Backups (important)
+### Build the Windows installer
+**Automatically (recommended):** every push to GitHub runs **Actions → Build Windows installer**. Open the run and download **BethesdaLabs-Windows-Installer** under *Artifacts*. Pushing a tag such as `v1.1.0` also attaches the installer to a GitHub Release.
 
-Go to **Settings → Download backup now** at the end of every day and copy the file to a USB drive or a cloud folder.
-To restore, stop the app and replace `data/bethesda.db` with a backup file (rename it to `bethesda.db`).
+**On a Windows PC:** install Python 3.12 and [Inno Setup 6](https://jrsoftware.org/isinfo.php), then double-click `packaging\build_windows.bat`.
 
-## 6. Good to know
-
-- Reports keep a snapshot of the reference range used at the time. Editing the catalog later does not change reports you have already issued.
-- Removing a parameter that has been used in past results only hides it for new results, so old reports stay intact.
-- Patient data is confidential. The `data/` folder is excluded from git, so never upload it anywhere.
-
-## Project layout
-
+### Licences (one-time setup, on YOUR computer)
+```bash
+pip install -r requirements.txt
+python tools/make_licence.py init
 ```
-run.py                   starts the app (python run.py [--lan] [--port 5000])
-bethesda/app.py          all screens / business logic
-bethesda/db.py           database schema, settings, numbering
-bethesda/catalog.py      default test list, reference ranges, packages
-bethesda/pdf_report.py   PDF report + receipt
-bethesda/ranges.py       range / H-L flag logic
-bethesda/templates/      HTML pages
-data/bethesda.db         your data (created on first run)
+This creates:
+- `~/.bethesda/licence_private.pem`, your **secret** signing key. **Back it up** to a USB drive. Never share or commit it; if you lose it, you cannot issue licences for existing installs.
+- `bethesda/licence_pubkey.pem`. **Commit and push it** so the next installer has licensing switched on. Builds without it have licensing off.
+
+For each lab or renewal, read the **Computer ID** from the lab's *Admin → Licence* page and run:
+```bash
+python tools/make_licence.py issue --lab "Bethesda Labs" --expires 2027-01-31 --machine ABCD-1234-EF56-7890
+```
+Send the `.lic` file (or its text) to the lab and install it under *Admin → Licence*. `--grace 30` (the default) is the number of days after expiry before new registrations pause. Leave out `--machine` to allow any PC.
+
+### Run from source (Mac / Linux / development)
+```bash
+./start_mac_linux.sh          # or: python run.py   (--lan, --port 8080, --no-tray)
+```
+When run from source, data is stored in `./data/`.
+
+### Project layout
+```
+run.py / packaging/BethesdaLabs.py   start the app (launcher: server + window + tray + backups)
+bethesda/app.py          screens and business logic
+bethesda/security.py     logins, roles, CSRF protection, activity log
+bethesda/backup.py       automatic backup, restore
+bethesda/licence.py      licence check (Ed25519 signatures)
+bethesda/pdf_report.py   report and receipt PDFs
+bethesda/db.py           database schema, upgrades, settings
+bethesda/catalog.py      default tests, ranges, packages
+packaging/               PyInstaller recipe, Inno Setup installer, icon, build script
+tools/make_licence.py    developer licence tool
 ```

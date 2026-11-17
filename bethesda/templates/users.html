@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}Users{% endblock %}
+{% block content %}
+<div class="row"><h1>Users</h1><a class="btn right" href="{{ url_for('user_form') }}">+ Add user</a></div>
+{% include "_admin_tabs.html" %}
+<p class="small muted"><b>Doctor / Owner</b>: everything, including money, commissions, settings and approving reports. <b>Technician / Reception</b>: register patients, billing, enter results and send them for approval. Cannot see commissions or change prices.</p>
+<div class="tablewrap"><table>
+<tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr>
+{% for u in rows %}<tr class="{{ 'muted' if not u.active }}"><td><b>{{ u.full_name }}</b></td><td>{{ u.username }}</td><td>{{ ROLES[u.role] }}</td>
+<td>{{ 'Active' if u.active else 'Disabled' }}</td><td class="small">{{ u.last_login or '-' }}</td>
+<td><a class="btn sm sec" href="{{ url_for('user_form', uid=u.id) }}">Edit / reset password</a></td></tr>{% endfor %}
+</table></div>
+{% endblock %}

@@ -3,3 +3,9 @@ data/
 .venv/
 __pycache__/
 *.pyc
+.buildenv/
+build/
+dist/
+*.lic
+# the licence PRIVATE key lives in ~/.bethesda and must never be committed
+*private*.pem

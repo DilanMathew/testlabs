@@ -1,5 +1,7 @@
 import os
+import secrets
 import sqlite3
+import sys
 from datetime import datetime
 
 from flask import g
@@ -7,8 +9,23 @@ from flask import g
 from . import catalog
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.environ.get("BETHESDA_DATA_DIR", os.path.join(BASE_DIR, "data"))
+
+
+def _default_data_dir():
+    """Source checkout -> ./data. Installed app -> a shared, writable system folder."""
+    if not getattr(sys, "frozen", False):
+        return os.path.join(BASE_DIR, "data")
+    if os.name == "nt":
+        return os.path.join(os.environ.get("PROGRAMDATA", r"C:\ProgramData"), "BethesdaLabs")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/BethesdaLabs")
+    return os.path.expanduser("~/.bethesdalabs")
+
+
+DATA_DIR = os.environ.get("BETHESDA_DATA_DIR") or _default_data_dir()
 DB_PATH = os.path.join(DATA_DIR, "bethesda.db")
+BRANDING_DIR = os.path.join(DATA_DIR, "branding")
+LOCAL_BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
@@ -143,7 +160,42 @@ CREATE TABLE IF NOT EXISTS results (
     UNIQUE (visit_id, parameter_id)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'technician',          -- admin | technician
+    password_hash TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    failed_logins INTEGER NOT NULL DEFAULT 0,
+    locked_until TEXT,
+    last_login TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- Every approved report is frozen here; corrections create a new version.
+CREATE TABLE IF NOT EXISTS report_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    visit_id INTEGER NOT NULL REFERENCES visits(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    sections_json TEXT NOT NULL,
+    remarks TEXT,
+    approved_by TEXT NOT NULL,
+    approved_at TEXT NOT NULL,
+    amend_reason TEXT,
+    UNIQUE (visit_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    username TEXT,
+    action TEXT NOT NULL,
+    details TEXT
+);
+
 CREATE INDEX IF NOT EXISTS ix_visits_date ON visits(visit_date);
+CREATE INDEX IF NOT EXISTS ix_audit_ts ON audit_log(ts);
 CREATE INDEX IF NOT EXISTS ix_visits_patient ON visits(patient_id);
 """
 
@@ -161,6 +213,20 @@ DEFAULT_SETTINGS = {
                      "Reference ranges are for adults unless stated otherwise.",
     "default_doctor_commission": "10",
     "default_hospital_commission": "15",
+    "backup_dir": "",            # external folder: USB drive or a cloud-synced folder
+    "backup_keep": "30",         # number of daily backups kept in each folder
+    "allow_lan": "0",            # 1 = other PCs on the lab network may connect
+}
+
+# Columns added after the first release; added automatically to older databases.
+MIGRATIONS = {
+    "visits": {
+        "approved_by": "TEXT",
+        "approved_at": "TEXT",
+        "report_version": "INTEGER NOT NULL DEFAULT 0",
+        "amend_reason": "TEXT",
+        "created_by": "TEXT",
+    },
 }
 
 
@@ -188,9 +254,30 @@ def close_db(_exc=None):
         db.close()
 
 
+def migrate(conn):
+    for table, cols in MIGRATIONS.items():
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for col, decl in cols.items():
+            if col not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+
+
+def secret_key():
+    """Random per-installation key for signing login sessions."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    path = os.path.join(DATA_DIR, "secret.key")
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            f.write(secrets.token_hex(32))
+    with open(path) as f:
+        return f.read().strip()
+
+
 def init_db():
     conn = connect()
     conn.executescript(SCHEMA)
+    migrate(conn)
+    conn.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('installed_on', ?)", (now()[:10],))
     for k, v in DEFAULT_SETTINGS.items():
         conn.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (k, v))
     if conn.execute("SELECT COUNT(*) FROM tests").fetchone()[0] == 0:
@@ -220,8 +307,14 @@ def seed_catalog(conn):
                 conn.execute("INSERT OR IGNORE INTO package_tests VALUES (?,?)", (pid, row[0]))
 
 
-def get_settings():
-    rows = get_db().execute("SELECT key, value FROM settings").fetchall()
+def set_setting(key, value, conn=None):
+    (conn or get_db()).execute(
+        "INSERT INTO settings(key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, value))
+
+
+def get_settings(conn=None):
+    rows = (conn or get_db()).execute("SELECT key, value FROM settings").fetchall()
     s = dict(DEFAULT_SETTINGS)
     s.update({r["key"]: r["value"] for r in rows})
     return s

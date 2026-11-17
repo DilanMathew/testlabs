@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Doctor{% endblock %}
 {% block content %}
 <h1>{{ 'Edit doctor' if d else 'Add doctor' }}</h1>
-<form method="post" class="card">
+<form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="grid g3">
   <div><label>Name *</label><input name="name" required value="{{ d.name if d else '' }}" placeholder="Dr. Full Name"></div>
   <div><label>Qualification</label><input name="qualification" value="{{ d.qualification or '' if d else '' }}" placeholder="MBBS, MD"></div>

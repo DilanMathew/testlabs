@@ -1,10 +1,12 @@
 {% extends "base.html" %}{% block title %}Results {{ v.visit_no }}{% endblock %}
 {% block content %}
-<div class="row"><h1>Enter results · {{ v.visit_no }}</h1><a class="right" href="{{ url_for('visit_detail', vid=v.id) }}">← back to visit</a></div>
+<div class="row"><h1>{{ 'Approved results' if locked else 'Enter results' }} · {{ v.visit_no }}</h1><a class="right" href="{{ url_for('visit_detail', vid=v.id) }}">← back to visit</a></div>
 <div class="card"><b>{{ v.patient_name }}</b> · {{ v.age if v.age is not none else '-' }} {{ v.age_unit if v.age is not none }} / {{ v.gender or 'gender not set' }} · Ref: {{ referred_by(v) }}
   {% if not v.gender %}<div class="small flagH">Gender is not set – female-specific reference ranges will not be applied. <a href="{{ url_for('patient_edit', pid=v.patient_id) }}">Edit patient</a></div>{% endif %}
-  <div class="small muted">Values outside the reference range turn red (high) or blue (low) as you type. Leave blank any parameter that was not done – it will be left out of the report.</div></div>
-<form method="post">
+  {% if locked %}<div class="small" style="margin-top:6px">🔒 Approved by {{ v.approved_by }} on {{ v.approved_at }}. To correct it, use “Amend report” on the visit page (doctor / owner only).</div>
+  {% else %}<div class="small muted">Values outside the reference range turn red (high) or blue (low) as you type. Leave blank any parameter that was not done – it will be left out of the report.</div>{% endif %}</div>
+{% if v.status == 'Amending' %}<div class="flash error">Amending approved report: {{ v.amend_reason }}</div>{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% for s in sections %}
 <div class="card res">
   <h3 style="margin-top:0">{{ s.name }} <span class="small muted">{{ s.code }} · {{ s.sample_type or '' }}</span></h3>
@@ -13,12 +15,13 @@
   {% for r in s.rows %}
   <tr>
     <td>{{ r.name }}</td>
+    {% if locked %}<td class="val {{ 'flag' ~ r.flag if r.flag }}">{{ r.value }} {{ r.flag }}</td>{% else %}
     <td>
       <input name="p_{{ r.pid }}" value="{{ r.value or '' }}" class="rv" autocomplete="off"
         data-low="{{ r.low|num }}" data-high="{{ r.high|num }}" data-normal="{{ r.normal_value }}"
         {% if r.options %}list="opt{{ r.pid }}"{% endif %}>
       {% if r.options %}<datalist id="opt{{ r.pid }}">{% for o in r.options.split('|') %}<option value="{{ o }}">{% endfor %}</datalist>{% endif %}
-    </td>
+    </td>{% endif %}
     <td class="small">{{ r.unit }}</td>
     <td class="rng">{{ r.range }}</td>
   </tr>
@@ -26,9 +29,14 @@
   </table>
 </div>
 {% else %}<div class="card muted">This visit has no tests.</div>{% endfor %}
-<div class="card"><label>Remarks / interpretation (printed on report)</label><textarea name="remarks" rows="3">{{ v.remarks or '' }}</textarea></div>
+<div class="card"><label>Remarks / interpretation (printed on report)</label>
+  {% if locked %}<div>{{ v.remarks or '—' }}</div>{% else %}<textarea name="remarks" rows="3">{{ v.remarks or '' }}</textarea>{% endif %}</div>
+{% if not locked %}
 <div class="row"><button class="btn sec" name="action" value="draft">Save draft</button>
-  <button class="btn" name="action" value="complete">Save & mark report completed</button></div>
+  {% if v.status != 'Amending' %}<button class="btn sec" name="action" value="submit">Save &amp; send for approval</button>{% endif %}
+  {% if is_admin %}<button class="btn" name="action" value="approve" onclick="return confirm('Approve and lock this report? After approval, changes need an amendment with a reason.')">Save &amp; approve report</button>{% endif %}
+</div>
+{% else %}<a class="btn" target="_blank" href="{{ url_for('report_pdf', vid=v.id) }}">Open report PDF</a>{% endif %}
 </form>
 {% endblock %}
 {% block scripts %}

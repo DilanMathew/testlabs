@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}Licence{% endblock %}
+{% block content %}
+<h1>Licence</h1>
+{% include "_admin_tabs.html" %}
+<div class="card">
+  <div class="grid g2">
+    <div><label>Status</label>
+      {% if st.state == 'off' %}Licensing not enabled in this build.
+      {% elif st.state == 'valid' %}<span class="badge b-Completed">Valid</span> until {{ st.payload.expires }} ({{ st.days_left }} days left)
+      {% elif st.state == 'trial' %}<span class="badge b-Registered">Trial</span> {{ st.days_left }} day(s) left
+      {% elif st.state == 'grace' %}<span class="badge b-AwaitingApproval">Expired – grace period</span>
+      {% else %}<span class="badge b-Amending">{{ st.state|replace('_',' ')|title }}</span>{% endif %}
+      {% if st.message %}<div class="small" style="margin-top:4px">{{ st.message }}</div>{% endif %}
+    </div>
+    <div><label>Computer ID (send this to the developer for a licence)</label><code class="mono" style="font-size:16px">{{ machine_id }}</code></div>
+    {% if st.payload %}<div><label>Licensed to</label>{{ st.payload.lab }}</div><div><label>Issued</label>{{ st.payload.issued }}</div>{% endif %}
+  </div>
+  <p class="small muted">If the licence expires, only <b>new visit registration</b> pauses (after a grace period). All patients, results, reports, receipts and backups always remain available.</p>
+</div>
+<form method="post" enctype="multipart/form-data" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h3 style="margin-top:0">Install / renew licence</h3>
+  <div><label>Upload the .lic file</label><input type="file" name="licence_file" accept=".lic,.txt"></div>
+  <div style="margin-top:10px"><label>…or paste the licence text</label><textarea name="licence_text" rows="5" class="mono"></textarea></div>
+  <button class="btn" style="margin-top:10px">Install licence</button>
+</form>
+{% endblock %}

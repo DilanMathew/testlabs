@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Package{% endblock %}
 {% block content %}
 <h1>{{ 'Edit package' if pk else 'Add package' }}</h1>
-<form method="post">
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="card grid g4">
   <div><label>Code *</label><input name="code" required value="{{ pk.code if pk else '' }}"></div>
   <div style="grid-column:span 2"><label>Name *</label><input name="name" required value="{{ pk.name if pk else '' }}"></div>

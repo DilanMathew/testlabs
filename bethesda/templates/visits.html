@@ -6,7 +6,7 @@
   <div><label>From</label><input type="date" name="from" value="{{ a['from'] or '' }}"></div>
   <div><label>To</label><input type="date" name="to" value="{{ a.to or '' }}"></div>
   <div><label>Status</label><select name="status"><option value="">All</option>
-    {% for s in ['Registered','Sample Collected','Completed'] %}<option {{ 'selected' if a.status==s }}>{{ s }}</option>{% endfor %}</select></div>
+    {% for s in STATUSES %}<option {{ 'selected' if a.status==s }}>{{ s }}</option>{% endfor %}</select></div>
   <div><label>Referral</label><select name="referral_type"><option value="">All</option>
     {% for s in ['Self','Doctor','Hospital'] %}<option {{ 'selected' if a.referral_type==s }}>{{ s }}</option>{% endfor %}</select></div>
   <div><button class="btn">Filter</button> <a class="btn sec" href="{{ url_for('visits') }}">Reset</a></div>

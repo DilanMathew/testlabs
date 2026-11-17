@@ -52,3 +52,15 @@ input[type=checkbox],input[type=radio]{width:auto}
 .ptable input{padding:4px 6px;font-size:12px}
 .radio-row{display:flex;gap:16px}.radio-row label{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--text);font-weight:500}
 .hidden{display:none!important}
+header.top .logo img{height:30px;vertical-align:middle;background:#fff;border-radius:4px;padding:2px}
+.userbox{margin-left:auto;display:flex;gap:10px;align-items:center;white-space:nowrap;color:#d9eef6;font-size:13px}
+.userbox a{color:#d9eef6}.userbox form{margin:0}
+.linkbtn{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:5px;padding:3px 8px;cursor:pointer;font:inherit;font-size:12px}
+.flash.info{background:#eef5fb;color:#1f4f7a}
+footer{text-align:center;padding:0 0 20px}
+.b-AwaitingApproval{background:#fdeedd;color:#b05a00}.b-Amending{background:#fde8e6;color:#a8322a}
+.authbox{max-width:400px;margin:60px auto}
+.authbox h1{text-align:center}
+.lockbar{background:#eef6ee;border:1px solid #cfe6cf;color:#1e6b41;padding:10px 14px;border-radius:8px;margin-bottom:12px}
+textarea.mono,code.mono{font-family:Consolas,Menlo,monospace;font-size:12px}
+.res td.val{font-weight:600}

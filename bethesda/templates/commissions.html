@@ -23,7 +23,7 @@
 </table></div>
 
 <h2>Details</h2>
-<form method="post" action="{{ url_for('commissions_mark') }}">
+<form method="post" action="{{ url_for('commissions_mark') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <input type="hidden" name="back" value="{{ request.full_path }}">
 <div class="row" style="margin-bottom:8px"><label style="margin:0">Paid on</label><input type="date" name="paid_on" value="{{ today }}" style="width:auto">
   <button class="btn sm" name="action" value="paid">Mark selected as paid</button>

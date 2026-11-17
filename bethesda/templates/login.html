@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Log in{% endblock %}
+{% block content %}
+<div class="authbox card">
+  {% if has_logo %}<p style="text-align:center"><img src="{{ url_for('branding_image', kind='logo') }}" style="max-height:70px" alt=""></p>{% endif %}
+  <h1>{{ settings.lab_name }}</h1>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label>Username</label><input name="username" autofocus required autocomplete="username"></div>
+    <div style="margin-top:10px"><label>Password</label><input type="password" name="password" required autocomplete="current-password"></div>
+    <button class="btn" style="width:100%;margin-top:14px;padding:10px">Log in</button>
+  </form>
+  <p class="small muted" style="margin-bottom:0">Forgot your password? Ask the doctor / owner to reset it from Admin → Users.</p>
+</div>
+{% endblock %}

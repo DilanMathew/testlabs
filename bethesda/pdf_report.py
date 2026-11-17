@@ -7,7 +7,8 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import (Flowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer,
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import (Flowable, Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer,
                                 Table, TableStyle)
 
 from .ranges import FLAG_LABEL, _num, range_text
@@ -91,18 +92,30 @@ class RangeBar(Flowable):
         c.rect(mx - 0.8, bar_y - 1, 1.6, bar_h + 2.5, stroke=0, fill=1)
 
 
-def _header_footer(settings, patient, visit):
+def _header_footer(settings, patient, visit, logo_path=None):
+    logo = ImageReader(logo_path) if logo_path else None
+
     def draw(canvas, doc):
         canvas.saveState()
         w, h = A4
         # Header band
         canvas.setFillColor(BRAND)
         canvas.rect(0, h - 2.6 * cm, w, 2.6 * cm, stroke=0, fill=1)
+        x = 1.5 * cm
+        if logo:
+            iw, ih = logo.getSize()
+            box_h = 2.0 * cm
+            box_w = min(box_h * iw / ih + 0.3 * cm, 5.0 * cm)
+            canvas.setFillColor(colors.white)
+            canvas.roundRect(x - 0.15 * cm, h - 2.3 * cm, box_w, box_h, 4, stroke=0, fill=1)
+            canvas.drawImage(logo, x, h - 2.2 * cm, width=box_w - 0.3 * cm, height=box_h - 0.2 * cm,
+                             preserveAspectRatio=True, anchor="c", mask="auto")
+            x += box_w + 0.3 * cm
         canvas.setFillColor(colors.white)
         canvas.setFont("Helvetica-Bold", 20)
-        canvas.drawString(1.5 * cm, h - 1.35 * cm, settings["lab_name"])
+        canvas.drawString(x, h - 1.35 * cm, settings["lab_name"])
         canvas.setFont("Helvetica", 9)
-        canvas.drawString(1.5 * cm, h - 1.9 * cm, settings.get("lab_tagline", ""))
+        canvas.drawString(x, h - 1.9 * cm, settings.get("lab_tagline", ""))
         canvas.drawRightString(w - 1.5 * cm, h - 1.15 * cm, settings.get("lab_address", ""))
         canvas.drawRightString(w - 1.5 * cm, h - 1.6 * cm,
                                f"Ph: {settings.get('lab_phone', '')}   {settings.get('lab_email', '')}")
@@ -121,7 +134,8 @@ def _header_footer(settings, patient, visit):
     return draw
 
 
-def build_report(settings, visit, patient, referred_by, sections):
+def build_report(settings, visit, patient, referred_by, sections, draft=False, approval=None,
+                 logo_path=None, signature_path=None):
     """
     sections: list of dicts {name, sample_type, rows:[{name, value, unit, low, high,
                                                         ref_text, normal_value, flag}]}
@@ -150,7 +164,18 @@ def build_report(settings, visit, patient, referred_by, sections):
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
-    story += [t, Paragraph("LABORATORY TEST REPORT", S_TITLE)]
+    title = "LABORATORY TEST REPORT"
+    if draft:
+        title += " - DRAFT (NOT APPROVED)"
+    elif approval and approval["version"] > 1:
+        title = f"AMENDED LABORATORY TEST REPORT (Version {approval['version']})"
+    story += [t, Paragraph(title, S_TITLE)]
+    if approval and approval.get("superseded"):
+        story.append(Paragraph("<font color='#c0392b'><b>This version has been superseded by a later amended "
+                               "report. Do not use for clinical decisions.</b></font>", S_CELL))
+    if approval and approval.get("amend_reason"):
+        story.append(Paragraph(f"<b>Reason for amendment:</b> {escape(approval['amend_reason'])}", S_CELL))
+        story.append(Spacer(1, 4))
 
     # Summary of out-of-range values
     abnormal = [(s["name"], r) for s in sections for r in s["rows"] if r["flag"]]
@@ -199,8 +224,9 @@ def build_report(settings, visit, patient, referred_by, sections):
         story.append(KeepTogether([Paragraph(title, S_TEST), tbl]) if len(rows) < 18
                      else Table([[Paragraph(title, S_TEST)], [tbl]]))
 
-    if visit["remarks"]:
-        story += [Spacer(1, 8), Paragraph(f"<b>Remarks:</b> {escape(visit['remarks'])}", S_CELL)]
+    remarks = approval["remarks"] if approval else visit["remarks"]
+    if remarks:
+        story += [Spacer(1, 8), Paragraph(f"<b>Remarks:</b> {escape(remarks)}", S_CELL)]
 
     story += [Spacer(1, 6), Paragraph(
         "<font color='#555555'>Legend: <b>H</b> = above reference range, <b>L</b> = below, "
@@ -208,20 +234,40 @@ def build_report(settings, visit, patient, referred_by, sections):
         "</font>", S_SMALL)]
     story.append(Paragraph("<para alignment='center'>*** End of Report ***</para>", S_SMALL))
 
-    sign = Table([[
-        P(f"{settings.get('technician_name', '')}\nLab Technician", S_SIGN),
-        P(f"{settings.get('pathologist_name', '')}\n{settings.get('pathologist_qualification', '')}\n"
-          f"Consultant Pathologist", S_SIGN),
-    ]], colWidths=[9 * cm, 9 * cm])
-    sign.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 30)]))
-    story.append(KeepTogether([sign]))
+    path_cell = [P(f"{settings.get('pathologist_name', '')}\n{settings.get('pathologist_qualification', '')}\n"
+                   f"Consultant Pathologist", S_SIGN)]
+    if signature_path and not draft:
+        ir = ImageReader(signature_path)
+        iw, ih = ir.getSize()
+        sh = 1.3 * cm
+        path_cell.insert(0, Image(signature_path, width=min(sh * iw / ih, 6 * cm), height=sh))
+    sign = Table([[P(f"{settings.get('technician_name', '')}\nLab Technician", S_SIGN), path_cell]],
+                 colWidths=[9 * cm, 9 * cm])
+    sign.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 4 if signature_path and not draft else 30),
+                              ("VALIGN", (0, 0), (-1, -1), "BOTTOM")]))
+    block = [Spacer(1, 10), sign]
+    if approval:
+        block.append(Paragraph(f"<para alignment='center'>Electronically approved by {escape(approval['approved_by'])}"
+                               f" on {escape(approval['approved_at'])}</para>", S_SMALL))
+    story.append(KeepTogether(block))
 
-    hf = _header_footer(settings, patient, visit)
+    hf = _header_footer(settings, patient, visit, logo_path)
+    if draft:
+        def watermark():  # drawn after the page content, so it shows over table backgrounds
+            c = doc.canv
+            c.saveState()
+            c.setFillColor(colors.Color(0.75, 0.2, 0.15, alpha=0.18))
+            c.setFont("Helvetica-Bold", 90)
+            c.translate(A4[0] / 2, A4[1] / 2)
+            c.rotate(35)
+            c.drawCentredString(0, 0, "DRAFT")
+            c.restoreState()
+        doc.afterPage = watermark
     doc.build(story, onFirstPage=hf, onLaterPages=hf)
     return buf.getvalue()
 
 
-def build_receipt(settings, visit, patient, referred_by, lines):
+def build_receipt(settings, visit, patient, referred_by, lines, logo_path=None):
     """Simple payment receipt / invoice. lines: list of (description, amount)."""
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=1.5 * cm, rightMargin=1.5 * cm,
@@ -251,6 +297,6 @@ def build_receipt(settings, visit, patient, referred_by, lines):
         ("LINEABOVE", (1, len(lines) + 1), (-1, len(lines) + 1), 0.8, BRAND),
     ]))
     story.append(tbl)
-    hf = _header_footer(settings, patient, visit)
+    hf = _header_footer(settings, patient, visit, logo_path)
     doc.build(story, onFirstPage=hf, onLaterPages=hf)
     return buf.getvalue()

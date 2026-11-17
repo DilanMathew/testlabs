@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}Activity log{% endblock %}
+{% block content %}
+<h1>Activity log</h1>
+{% include "_admin_tabs.html" %}
+<form class="filters"><div style="min-width:300px"><label>Search</label><input name="q" value="{{ q }}" placeholder="Action, user or visit no"></div><div><button class="btn">Search</button></div></form>
+<p class="small muted">Who did what and when: logins, registrations, payments, results, approvals, amendments, price changes, commission payments, backups. Last 500 entries.</p>
+<div class="tablewrap"><table>
+<tr><th>When</th><th>User</th><th>Action</th><th>Details</th></tr>
+{% for r in rows %}<tr><td class="small">{{ r.ts }}</td><td>{{ r.username or 'system' }}</td><td>{{ r.action|replace('_',' ') }}</td><td class="small">{{ r.details or '' }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">No entries.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

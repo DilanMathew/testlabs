@@ -1,7 +1,26 @@
 {% extends "base.html" %}{% block title %}Settings{% endblock %}
 {% block content %}
-<h1>Settings</h1>
+<h1>Admin</h1>
+{% include "_admin_tabs.html" %}
+<div class="card">
+  <h3 style="margin-top:0">Logo &amp; signature (printed on reports)</h3>
+  <div class="grid g2">
+    {% for kind, label, hint, cur in [('logo','Lab logo','PNG or JPG. Shown on reports, receipts and the login screen.', logo), ('signature','Pathologist signature','Sign on white paper, photograph or scan it, and crop tightly. Printed only on approved reports.', signature)] %}
+    <div>
+      <label>{{ label }}</label>
+      {% if cur %}<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px;background:#fff"><img src="{{ url_for('branding_image', kind=kind) }}?t={{ range(100000)|random }}" style="max-height:80px;max-width:100%" alt=""></div>{% endif %}
+      <form method="post" action="{{ url_for('settings_branding') }}" enctype="multipart/form-data" class="row">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="kind" value="{{ kind }}">
+        <input type="file" name="image" accept="image/png,image/jpeg" style="flex:1"><button class="btn sm">Upload</button>
+      </form>
+      {% if cur %}<form method="post" action="{{ url_for('branding_delete', kind=kind) }}" style="margin-top:4px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn sm danger">Remove</button></form>{% endif %}
+      <div class="small muted">{{ hint }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
 <form method="post" class="card">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <h3 style="margin-top:0">Lab details (printed on every report)</h3>
 <div class="grid g2">
   <div><label>Lab name</label><input name="lab_name" value="{{ settings.lab_name }}"></div>
@@ -12,7 +31,7 @@
   <div><label>Currency label</label><input name="currency" value="{{ settings.currency }}"></div>
   <div><label>Consultant pathologist</label><input name="pathologist_name" value="{{ settings.pathologist_name }}"></div>
   <div><label>Pathologist qualification</label><input name="pathologist_qualification" value="{{ settings.pathologist_qualification }}"></div>
-  <div><label>Lab technician</label><input name="technician_name" value="{{ settings.technician_name }}"></div>
+  <div><label>Lab technician (printed on reports)</label><input name="technician_name" value="{{ settings.technician_name }}"></div>
   <div></div>
   <div style="grid-column:1/-1"><label>Report footer / disclaimer</label><input name="report_footer" value="{{ settings.report_footer }}"></div>
 </div>
@@ -21,11 +40,9 @@
   <div><label>Doctor %</label><input type="number" step="0.01" name="default_doctor_commission" value="{{ settings.default_doctor_commission }}"></div>
   <div><label>Hospital %</label><input type="number" step="0.01" name="default_hospital_commission" value="{{ settings.default_hospital_commission }}"></div>
 </div>
+<h3>Network</h3>
+<input type="hidden" name="allow_lan_present" value="1">
+<label style="display:flex;gap:8px;align-items:center;color:var(--text);font-weight:400"><input type="checkbox" name="allow_lan" {{ 'checked' if settings.allow_lan == '1' }}> Allow other computers in the lab network to use this software (takes effect after restarting the software)</label>
 <div style="margin-top:14px"><button class="btn">Save settings</button></div>
 </form>
-<div class="card"><h3 style="margin-top:0">Data & backup</h3>
-  <p>All data is stored on this computer in:<br><code>{{ db_path }}</code></p>
-  <p>Take a backup at the end of every day and keep a copy on a USB drive or cloud folder.</p>
-  <a class="btn" href="{{ url_for('backup') }}">Download backup now</a>
-</div>
 {% endblock %}

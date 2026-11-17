@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}Welcome{% endblock %}
+{% block content %}
+<div class="authbox card" style="max-width:480px">
+  <h1>Welcome 👋</h1>
+  <p>First-time setup. Create the <b>doctor / owner</b> account. This account has full access: money, commissions, settings, users and report approval.</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label>Lab name</label><input name="lab_name" value="{{ settings.lab_name }}"></div>
+    <div style="margin-top:10px"><label>Your full name (printed on approved reports)</label><input name="full_name" required placeholder="Dr. Full Name"></div>
+    <div style="margin-top:10px"><label>Username</label><input name="username" required autocomplete="username"></div>
+    <div style="margin-top:10px"><label>Password (min 6 characters)</label><input type="password" name="password" required autocomplete="new-password"></div>
+    <div style="margin-top:10px"><label>Repeat password</label><input type="password" name="password2" required autocomplete="new-password"></div>
+    <button class="btn" style="width:100%;margin-top:14px;padding:10px">Create account &amp; start</button>
+  </form>
+</div>
+{% endblock %}

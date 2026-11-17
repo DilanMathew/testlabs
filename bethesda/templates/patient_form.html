@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Patient{% endblock %}
 {% block content %}
 <h1>{{ 'Edit patient' if p.id else 'Register patient' }}</h1>
-<form method="post" class="card">
+<form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% include "_patient_fields.html" %}
   <div class="row" style="margin-top:14px"><button class="btn">Save</button><a class="btn sec" href="{{ url_for('patients') }}">Cancel</a></div>
 </form>

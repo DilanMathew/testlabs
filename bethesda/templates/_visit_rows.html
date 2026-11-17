@@ -11,7 +11,7 @@
   <td class="r">{% if v.net_amount > v.paid_amount %}<span class="flagH">{{ (v.net_amount - v.paid_amount)|money }}</span>{% else %}-{% endif %}</td>
   <td><span class="badge b-{{ v.status|replace(' ','') }}">{{ v.status }}</span></td>
   <td class="row">
-    <a class="btn sm sec" href="{{ url_for('results', vid=v.id) }}">Results</a>
+    <a class="btn sm sec" href="{{ url_for('results', vid=v.id) }}">{{ 'View' if v.status=='Completed' else ('Approve' if is_admin and v.status in ('Awaiting Approval','Amending') else 'Results') }}</a>
     {% if v.status=='Completed' %}<a class="btn sm" target="_blank" href="{{ url_for('report_pdf', vid=v.id) }}">PDF</a>{% endif %}
   </td>
 </tr>

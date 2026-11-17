@@ -1,0 +1,8 @@
+{% set ep = request.endpoint %}
+<div class="row" style="margin-bottom:14px">
+  <a class="btn sm {{ '' if ep=='settings_page' else 'sec' }}" href="{{ url_for('settings_page') }}">Lab settings &amp; logo</a>
+  <a class="btn sm {{ '' if ep in ('users','user_form') else 'sec' }}" href="{{ url_for('users') }}">Users</a>
+  <a class="btn sm {{ '' if ep=='backup_page' else 'sec' }}" href="{{ url_for('backup_page') }}">Backup &amp; restore</a>
+  <a class="btn sm {{ '' if ep=='licence_page' else 'sec' }}" href="{{ url_for('licence_page') }}">Licence</a>
+  <a class="btn sm {{ '' if ep=='audit_page' else 'sec' }}" href="{{ url_for('audit_page') }}">Activity log</a>
+</div>

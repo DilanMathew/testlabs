@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Test{% endblock %}
 {% block content %}
 <h1>{{ 'Edit test: ' ~ t.name if t else 'Add test' }}</h1>
-<form method="post">
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="card grid g4">
   <div><label>Code *</label><input name="code" required value="{{ t.code if t else '' }}"></div>
   <div style="grid-column:span 2"><label>Name *</label><input name="name" required value="{{ t.name if t else '' }}"></div>

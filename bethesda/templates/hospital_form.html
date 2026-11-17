@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Hospital{% endblock %}
 {% block content %}
 <h1>{{ 'Edit hospital' if h else 'Add hospital' }}</h1>
-<form method="post" class="card">
+<form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="grid g3">
   <div><label>Name *</label><input name="name" required value="{{ h.name if h else '' }}"></div>
   <div><label>Contact person</label><input name="contact_person" value="{{ h.contact_person or '' if h else '' }}"></div>

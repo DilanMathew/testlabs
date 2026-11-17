@@ -1,20 +1,36 @@
 import csv
 import io
+import json
 import os
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from flask import (Flask, Response, abort, flash, redirect, render_template, request, send_file,
-                   url_for)
+from flask import (Flask, Response, abort, flash, g, redirect, render_template, request, send_file,
+                   session, url_for)
 
+from . import __version__
+from . import backup as bk
 from . import db as dbm
+from . import licence as lic
 from .db import get_db, get_settings, next_number, now
 from .pdf_report import build_receipt, build_report
 from .ranges import FLAG_LABEL, compute_flag, limits_for, range_text
+from .security import (ROLES, attempt_login, audit, csrf_token, current_user, guard, hash_password,
+                       is_admin, login_user, password_problem)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("BETHESDA_SECRET", "bethesda-local-only-secret")
+app.secret_key = os.environ.get("BETHESDA_SECRET") or dbm.secret_key()
+app.config.update(PERMANENT_SESSION_LIFETIME=timedelta(hours=12), SESSION_COOKIE_HTTPONLY=True,
+                  SESSION_COOKIE_SAMESITE="Lax", MAX_CONTENT_LENGTH=8 * 1024 * 1024)
 app.teardown_appcontext(dbm.close_db)
+app.before_request(guard)
+
+STATUSES = ["Registered", "Sample Collected", "Awaiting Approval", "Amending", "Completed"]
+
+
+def branding_file(kind):
+    path = os.path.join(dbm.BRANDING_DIR, f"{kind}.png")
+    return path if os.path.exists(path) else None
 
 
 # --------------------------------------------------------------------------- helpers
@@ -34,7 +50,14 @@ def fint(v, default=None):
 
 @app.context_processor
 def inject_globals():
-    return {"settings": get_settings(), "today": date.today().isoformat(), "FLAG_LABEL": FLAG_LABEL}
+    settings = get_settings()
+    ctx = {"settings": settings, "today": date.today().isoformat(), "FLAG_LABEL": FLAG_LABEL,
+           "current_user": current_user(), "is_admin": is_admin(), "csrf_token": csrf_token,
+           "version": __version__, "has_logo": bool(branding_file("logo")), "STATUSES": STATUSES}
+    if current_user():
+        ctx["licence"] = lic.status(settings)
+        ctx["backup_health"] = bk.status(settings) if is_admin() else None
+    return ctx
 
 
 @app.template_filter("money")
@@ -93,6 +116,7 @@ def dashboard():
                SUM(referral_type='Hospital') AS hosp_n
         FROM visits WHERE substr(visit_date,1,7)=?""", (month,)).fetchone()
     pending = db.execute("SELECT COUNT(*) FROM visits WHERE status!='Completed'").fetchone()[0]
+    awaiting = db.execute("SELECT COUNT(*) FROM visits WHERE status IN ('Awaiting Approval','Amending')").fetchone()[0]
     unpaid_comm = db.execute("""
         SELECT COALESCE(SUM(CASE WHEN doctor_commission_paid_on IS NULL THEN doctor_commission ELSE 0 END),0)
              + COALESCE(SUM(CASE WHEN hospital_commission_paid_on IS NULL THEN hospital_commission ELSE 0 END),0)
@@ -100,7 +124,7 @@ def dashboard():
     dues = db.execute("SELECT COALESCE(SUM(net_amount-paid_amount),0) FROM visits WHERE net_amount>paid_amount").fetchone()[0]
     recent = db.execute(VISIT_SELECT + " ORDER BY v.id DESC LIMIT 12").fetchall()
     return render_template("dashboard.html", stats=stats, mstats=mstats, pending=pending,
-                           unpaid_comm=unpaid_comm, dues=dues, recent=recent)
+                           unpaid_comm=unpaid_comm, dues=dues, recent=recent, awaiting=awaiting)
 
 
 # --------------------------------------------------------------------------- patients
@@ -226,13 +250,20 @@ def save_visit(form, visit_id=None):
     net = gross - discount
     paid = max(fnum(form.get("paid_amount"), 0), 0)
 
+    # Commission %: the admin may override per visit; technicians always get the stored rate
+    # (or the visit's existing rate when editing a visit for the same referrer).
+    old = db.execute("SELECT * FROM visits WHERE id=?", (visit_id,)).fetchone() if visit_id else None
     d_pct = h_pct = 0.0
     if doctor_id:
-        d_pct = fnum(form.get("doctor_commission_pct"))
+        d_pct = fnum(form.get("doctor_commission_pct")) if is_admin() else None
+        if d_pct is None and old is not None and old["doctor_id"] == doctor_id:
+            d_pct = old["doctor_commission_pct"]
         if d_pct is None:
             d_pct = db.execute("SELECT commission_pct FROM doctors WHERE id=?", (doctor_id,)).fetchone()[0]
     if hospital_id:
-        h_pct = fnum(form.get("hospital_commission_pct"))
+        h_pct = fnum(form.get("hospital_commission_pct")) if is_admin() else None
+        if h_pct is None and old is not None and old["hospital_id"] == hospital_id:
+            h_pct = old["hospital_commission_pct"]
         if h_pct is None:
             h_pct = db.execute("SELECT commission_pct FROM hospitals WHERE id=?", (hospital_id,)).fetchone()[0]
     d_comm = round(net * d_pct / 100, 2)
@@ -247,7 +278,7 @@ def save_visit(form, visit_id=None):
     if visit_id is None:
         values.update(visit_no=next_number("BL", "visits", "visit_no"),
                       visit_date=(form.get("visit_date") or now()).replace("T", " "),
-                      status="Registered", created_at=now())
+                      status="Registered", created_at=now(), created_by=current_user()["username"])
         cols = ", ".join(values)
         cur = db.execute(f"INSERT INTO visits({cols}) VALUES ({', '.join('?' * len(values))})",
                          list(values.values()))
@@ -268,6 +299,9 @@ def save_visit(form, visit_id=None):
                        (visit_id, tid, cur.lastrowid))
     for t in lines_test:
         db.execute("INSERT INTO visit_tests(visit_id, test_id, price) VALUES (?,?,?)", (visit_id, t["id"], t["price"]))
+    vno = db.execute("SELECT visit_no FROM visits WHERE id=?", (visit_id,)).fetchone()[0]
+    audit("visit_updated" if old is not None else "visit_created",
+          f"{vno}: net {net:.2f}, paid {paid:.2f}, referral {ref}")
     db.commit()
     return visit_id
 
@@ -279,6 +313,11 @@ def visit_new():
     pid = fint(request.values.get("patient_id"))
     if pid:
         patient = db.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    licence = lic.status(get_settings())
+    if licence["blocks_new_visits"]:
+        return render_template("message.html", title="New visits are paused",
+                               message=licence["message"] + " Contact the developer to renew the licence. "
+                               "You can still open, print and share all existing patients, visits and reports.")
     if request.method == "POST":
         try:
             vid = save_visit(request.form)
@@ -295,6 +334,10 @@ def visit_new():
 def visit_edit(vid):
     db = get_db()
     visit = load_visit(vid)
+    if visit["status"] in ("Completed", "Amending", "Awaiting Approval"):
+        flash("Tests and billing cannot be changed once results are submitted or the report is approved. "
+              "Use 'Collect' for payments.", "error")
+        return redirect(url_for("visit_detail", vid=vid))
     if request.method == "POST":
         try:
             save_visit(request.form, visit_id=vid)
@@ -344,29 +387,34 @@ def visit_items(vid):
 def visit_detail(vid):
     visit = load_visit(vid)
     pkgs, tests = visit_items(vid)
-    n_results = get_db().execute("SELECT COUNT(*) FROM results WHERE visit_id=? AND value IS NOT NULL AND value!=''",
-                                 (vid,)).fetchone()[0]
-    return render_template("visit_detail.html", v=visit, pkgs=pkgs, tests=tests, n_results=n_results)
+    db = get_db()
+    n_results = db.execute("SELECT COUNT(*) FROM results WHERE visit_id=? AND value IS NOT NULL AND value!=''",
+                           (vid,)).fetchone()[0]
+    versions = db.execute("SELECT version, approved_by, approved_at, amend_reason FROM report_versions "
+                          "WHERE visit_id=? ORDER BY version DESC", (vid,)).fetchall()
+    return render_template("visit_detail.html", v=visit, pkgs=pkgs, tests=tests, n_results=n_results,
+                           versions=versions)
 
 
 @app.route("/visits/<int:vid>/status", methods=["POST"])
 def visit_status(vid):
     db = get_db()
-    status = request.form.get("status")
-    if status == "Sample Collected":
-        db.execute("UPDATE visits SET status=?, sample_collected_at=? WHERE id=?", (status, now(), vid))
-    elif status in ("Registered", "Completed"):
-        db.execute("UPDATE visits SET status=? WHERE id=?", (status, vid))
-    db.commit()
+    v = load_visit(vid)
+    if request.form.get("status") == "Sample Collected" and v["status"] == "Registered":
+        db.execute("UPDATE visits SET status='Sample Collected', sample_collected_at=? WHERE id=?", (now(), vid))
+        audit("sample_collected", v["visit_no"])
+        db.commit()
     return redirect(url_for("visit_detail", vid=vid))
 
 
 @app.route("/visits/<int:vid>/payment", methods=["POST"])
 def visit_payment(vid):
     db = get_db()
+    v = load_visit(vid)
     add = max(fnum(request.form.get("amount"), 0), 0)
     db.execute("UPDATE visits SET paid_amount=paid_amount+?, payment_mode=COALESCE(?, payment_mode) WHERE id=?",
                (add, request.form.get("payment_mode") or None, vid))
+    audit("payment", f"{v['visit_no']}: {add:.2f} by {request.form.get('payment_mode') or '-'}")
     db.commit()
     flash(f"Payment of {add:,.2f} recorded", "ok")
     return redirect(url_for("visit_detail", vid=vid))
@@ -375,6 +423,12 @@ def visit_payment(vid):
 @app.route("/visits/<int:vid>/delete", methods=["POST"])
 def visit_delete(vid):
     db = get_db()
+    v = load_visit(vid)
+    if v["status"] == "Completed":
+        flash("An approved report cannot be deleted. Use 'Amend report' to correct it.", "error")
+        return redirect(url_for("visit_detail", vid=vid))
+    audit("visit_deleted", f"{v['visit_no']} ({v['patient_name']}), net {v['net_amount']:.2f}")
+    db.execute("DELETE FROM report_versions WHERE visit_id=?", (vid,))
     db.execute("DELETE FROM results WHERE visit_id=?", (vid,))
     db.execute("DELETE FROM visit_tests WHERE visit_id=?", (vid,))
     db.execute("DELETE FROM visit_packages WHERE visit_id=?", (vid,))
@@ -411,43 +465,99 @@ def report_sections(vid, gender, live=False):
     return sections
 
 
+def _save_results(vid, v):
+    db = get_db()
+    for s in report_sections(vid, v["gender"], live=True):
+        for r in s["rows"]:
+            key = f"p_{r['pid']}"
+            if key not in request.form:
+                continue
+            val = request.form[key].strip()
+            flag = compute_flag(val, r["low"], r["high"], r["normal_value"])
+            db.execute("""INSERT INTO results(visit_id, parameter_id, value, unit, ref_low, ref_high, ref_text,
+                                              normal_value, flag)
+                          VALUES (?,?,?,?,?,?,?,?,?)
+                          ON CONFLICT(visit_id, parameter_id) DO UPDATE SET value=excluded.value,
+                            unit=excluded.unit, ref_low=excluded.ref_low, ref_high=excluded.ref_high,
+                            ref_text=excluded.ref_text, normal_value=excluded.normal_value, flag=excluded.flag""",
+                       (vid, r["pid"], val, r["unit"], r["low"], r["high"], r["ref_text"], r["normal_value"], flag))
+    db.execute("UPDATE visits SET remarks=? WHERE id=?", (request.form.get("remarks", "").strip(), vid))
+
+
+def _approve(vid, v):
+    """Freeze the current results as a new report version."""
+    db = get_db()
+    sections = report_sections(vid, v["gender"])
+    remarks = db.execute("SELECT remarks FROM visits WHERE id=?", (vid,)).fetchone()[0]
+    version = (v["report_version"] or 0) + 1
+    who = current_user()["full_name"]
+    ts = now()
+    reason = v["amend_reason"] if version > 1 else None
+    db.execute("""INSERT INTO report_versions(visit_id, version, sections_json, remarks, approved_by, approved_at,
+                                              amend_reason) VALUES (?,?,?,?,?,?,?)""",
+               (vid, version, json.dumps(sections), remarks, who, ts, reason))
+    db.execute("""UPDATE visits SET status='Completed', report_version=?, approved_by=?, approved_at=?,
+                  reported_at=?, sample_collected_at=COALESCE(sample_collected_at, visit_date)
+                  WHERE id=?""", (version, who, ts, ts, vid))
+    audit("report_approved", f"{v['visit_no']} version {version}" + (f" (amended: {reason})" if reason else ""))
+
+
 @app.route("/visits/<int:vid>/results", methods=["GET", "POST"])
 def results(vid):
     db = get_db()
     v = load_visit(vid)
+    locked = v["status"] == "Completed"
     if request.method == "POST":
-        for s in report_sections(vid, v["gender"], live=True):
-            for r in s["rows"]:
-                key = f"p_{r['pid']}"
-                if key not in request.form:
-                    continue
-                val = request.form[key].strip()
-                flag = compute_flag(val, r["low"], r["high"], r["normal_value"])
-                db.execute("""INSERT INTO results(visit_id, parameter_id, value, unit, ref_low, ref_high, ref_text,
-                                                  normal_value, flag)
-                              VALUES (?,?,?,?,?,?,?,?,?)
-                              ON CONFLICT(visit_id, parameter_id) DO UPDATE SET value=excluded.value,
-                                unit=excluded.unit, ref_low=excluded.ref_low, ref_high=excluded.ref_high,
-                                ref_text=excluded.ref_text, normal_value=excluded.normal_value, flag=excluded.flag""",
-                           (vid, r["pid"], val, r["unit"], r["low"], r["high"], r["ref_text"], r["normal_value"], flag))
-        db.execute("UPDATE visits SET remarks=? WHERE id=?", (request.form.get("remarks", "").strip(), vid))
-        if request.form.get("action") == "complete":
-            db.execute("UPDATE visits SET status='Completed', reported_at=?, "
-                       "sample_collected_at=COALESCE(sample_collected_at, visit_date) WHERE id=?", (now(), vid))
-            flash("Results saved and report marked as completed", "ok")
+        if locked:
+            flash("This report is approved and locked. Use 'Amend report' to correct it.", "error")
+            return redirect(url_for("visit_detail", vid=vid))
+        action = request.form.get("action")
+        if action == "approve" and not is_admin():
+            abort(403)
+        _save_results(vid, v)
+        if action == "approve":
+            _approve(vid, v)
+            flash("Report approved and locked. The PDF is ready.", "ok")
+        elif action == "submit":
+            db.execute("UPDATE visits SET status='Awaiting Approval', "
+                       "sample_collected_at=COALESCE(sample_collected_at, ?) WHERE id=?", (now(), vid))
+            audit("results_submitted", v["visit_no"])
+            flash("Results saved and sent to the doctor for approval.", "ok")
         else:
             if v["status"] == "Registered":
-                db.execute("UPDATE visits SET status='Sample Collected', sample_collected_at=? WHERE id=?", (now(), vid))
+                db.execute("UPDATE visits SET status='Sample Collected', sample_collected_at=? WHERE id=?",
+                           (now(), vid))
+            audit("results_saved", v["visit_no"])
             flash("Results saved (draft)", "ok")
         db.commit()
         return redirect(url_for("visit_detail", vid=vid))
-    sections = report_sections(vid, v["gender"], live=True)
-    saved = {r["parameter_id"]: r["value"] for r in db.execute("SELECT * FROM results WHERE visit_id=?", (vid,))}
+    sections = report_sections(vid, v["gender"], live=not locked)
+    if not locked:
+        saved = {r["parameter_id"]: r["value"] for r in db.execute("SELECT * FROM results WHERE visit_id=?", (vid,))}
+        for s in sections:
+            for r in s["rows"]:
+                r["value"] = saved.get(r["pid"], "")
     for s in sections:
         for r in s["rows"]:
-            r["value"] = saved.get(r["pid"], "")
             r["range"] = range_text(r["low"], r["high"], r["ref_text"], r["normal_value"])
-    return render_template("results_form.html", v=v, sections=sections)
+    return render_template("results_form.html", v=v, sections=sections, locked=locked)
+
+
+@app.route("/visits/<int:vid>/amend", methods=["POST"])
+def visit_amend(vid):
+    db = get_db()
+    v = load_visit(vid)
+    reason = request.form.get("reason", "").strip()
+    if v["status"] != "Completed":
+        return redirect(url_for("visit_detail", vid=vid))
+    if len(reason) < 5:
+        flash("Please give the reason for amending the report.", "error")
+        return redirect(url_for("visit_detail", vid=vid))
+    db.execute("UPDATE visits SET status='Amending', amend_reason=? WHERE id=?", (reason, vid))
+    audit("report_amend_started", f"{v['visit_no']}: {reason}")
+    db.commit()
+    flash("Report unlocked for correction. Approve it again to issue the amended version.", "ok")
+    return redirect(url_for("results", vid=vid))
 
 
 def _pdf_response(data, filename, download):
@@ -455,15 +565,40 @@ def _pdf_response(data, filename, download):
         "Content-Disposition": f'{"attachment" if download else "inline"}; filename="{filename}"'})
 
 
+def _branding():
+    return dict(logo_path=branding_file("logo"), signature_path=branding_file("signature"))
+
+
 @app.route("/visits/<int:vid>/report.pdf")
 def report_pdf(vid):
     db = get_db()
     v = load_visit(vid)
     patient = db.execute("SELECT * FROM patients WHERE id=?", (v["patient_id"],)).fetchone()
-    sections = report_sections(vid, v["gender"])
-    pdf = build_report(get_settings(), v, patient, referred_by(v), sections)
+    want = fint(request.args.get("v"))
+    snap = None
+    if want:
+        snap = db.execute("SELECT * FROM report_versions WHERE visit_id=? AND version=?", (vid, want)).fetchone()
+        if not snap:
+            abort(404)
+    elif v["status"] == "Completed":
+        snap = db.execute("SELECT * FROM report_versions WHERE visit_id=? ORDER BY version DESC LIMIT 1",
+                          (vid,)).fetchone()
+    if snap:
+        sections = json.loads(snap["sections_json"])
+        approval = dict(version=snap["version"], approved_by=snap["approved_by"], approved_at=snap["approved_at"],
+                        amend_reason=snap["amend_reason"], remarks=snap["remarks"],
+                        superseded=snap["version"] < (v["report_version"] or 0))
+        draft = False
+    else:
+        # Not yet approved -> DRAFT. (Reports completed before versioning existed have no snapshot:
+        # they print from the saved results, which already hold the ranges used at the time.)
+        sections = report_sections(vid, v["gender"])
+        approval, draft = None, v["status"] != "Completed"
+    pdf = build_report(get_settings(), v, patient, referred_by(v), sections, draft=draft, approval=approval,
+                       **_branding())
     safe = "".join(c for c in patient["name"] if c.isalnum() or c in " -_").strip().replace(" ", "_")
-    return _pdf_response(pdf, f"{v['visit_no']}_{safe}.pdf", request.args.get("download"))
+    suffix = f"_v{snap['version']}" if snap and snap["version"] > 1 else ("_DRAFT" if draft else "")
+    return _pdf_response(pdf, f"{v['visit_no']}_{safe}{suffix}.pdf", request.args.get("download"))
 
 
 @app.route("/visits/<int:vid>/receipt.pdf")
@@ -474,7 +609,7 @@ def receipt_pdf(vid):
     pkgs, tests = visit_items(vid)
     lines = [(f"Package: {p['name']}", p["price"]) for p in pkgs]
     lines += [(f"{t['name']} ({t['code']})", t["price"]) for t in tests if not t["visit_package_id"]]
-    pdf = build_receipt(get_settings(), v, patient, referred_by(v), lines)
+    pdf = build_receipt(get_settings(), v, patient, referred_by(v), lines, logo_path=branding_file("logo"))
     return _pdf_response(pdf, f"Receipt_{v['visit_no']}.pdf", request.args.get("download"))
 
 
@@ -514,6 +649,7 @@ def doctor_form(did=None):
                 db.execute("""INSERT INTO doctors(name, qualification, specialization, registration_no, phone, email,
                               hospital_id, commission_pct, active, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)""",
                            (*vals, now()))
+            audit("doctor_saved", f"{vals[0]} commission {vals[7]}%")
             db.commit()
             flash("Doctor saved", "ok")
             return redirect(url_for("doctors"))
@@ -553,6 +689,7 @@ def hospital_form(hid=None):
             else:
                 db.execute("""INSERT INTO hospitals(name, address, phone, email, contact_person, commission_pct, active,
                               created_at) VALUES (?,?,?,?,?,?,?,?)""", (*vals, now()))
+            audit("hospital_saved", f"{vals[0]} commission {vals[5]}%")
             db.commit()
             flash("Hospital saved", "ok")
             return redirect(url_for("hospitals"))
@@ -625,6 +762,8 @@ def commissions_mark():
             continue
         db.execute(f"UPDATE visits SET {party}_commission_paid_on=? WHERE id=?", (None if unmark else paid_on, int(vid)))
         n += 1
+    audit("commissions_marked_" + ("unpaid" if unmark else "paid"),
+          f"{n} entries, paid on {paid_on}: {', '.join(request.form.getlist('items'))[:500]}")
     db.commit()
     flash(f"{n} commission entr{'y' if n == 1 else 'ies'} marked as {'unpaid' if unmark else 'paid on ' + paid_on}", "ok")
     return redirect(request.form.get("back") or url_for("commissions"))
@@ -711,6 +850,7 @@ def test_form(tid=None):
                 db.execute("UPDATE parameters SET active=0 WHERE id=?", (pid,))
             else:
                 db.execute("DELETE FROM parameters WHERE id=?", (pid,))
+        audit("test_saved", f"{vals[0]} {vals[1]} price {vals[4]}")
         db.commit()
         flash("Test saved", "ok")
         return redirect(url_for("tests"))
@@ -753,6 +893,7 @@ def package_form(pkid=None):
         db.execute("DELETE FROM package_tests WHERE package_id=?", (pkid,))
         for tid in {fint(x) for x in f.getlist("test_ids") if fint(x)}:
             db.execute("INSERT INTO package_tests VALUES (?,?)", (pkid, tid))
+        audit("package_saved", f"{vals[0]} {vals[1]} price {vals[2]}")
         db.commit()
         flash("Package saved", "ok")
         return redirect(url_for("packages"))
@@ -761,32 +902,303 @@ def package_form(pkid=None):
     return render_template("package_form.html", pk=pk, sel=sel, tests=all_tests)
 
 
-# --------------------------------------------------------------------------- settings & backup
+# --------------------------------------------------------------------------- login & users
+@app.route("/ping")
+def ping():
+    return "bethesda-labs"
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    """First run only: create the doctor / owner account."""
+    db = get_db()
+    if db.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        f = request.form
+        err = password_problem(f.get("password")) or (
+            "Passwords do not match" if f.get("password") != f.get("password2") else None) or (
+            "Username and full name are required" if not f.get("username", "").strip() or not f.get("full_name", "").strip() else None)
+        if err:
+            flash(err, "error")
+        else:
+            db.execute("INSERT INTO users(username, full_name, role, password_hash, created_at) VALUES (?,?,?,?,?)",
+                       (f["username"].strip(), f["full_name"].strip(), "admin", hash_password(f["password"]), now()))
+            if f.get("lab_name", "").strip():
+                dbm.set_setting("lab_name", f["lab_name"].strip())
+            db.commit()
+            u = db.execute("SELECT * FROM users WHERE username=?", (f["username"].strip(),)).fetchone()
+            login_user(u)
+            g.user = u
+            audit("first_setup", f"admin account {u['username']} created")
+            db.commit()
+            flash("Welcome! Next: fill in Settings, upload your logo, and set the backup folder.", "ok")
+            return redirect(url_for("settings_page"))
+    return render_template("setup.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        u, err = attempt_login(request.form.get("username", ""), request.form.get("password", ""))
+        if err:
+            flash(err, "error")
+        else:
+            login_user(u)
+            g.user = u
+            audit("login", request.remote_addr or "")
+            get_db().commit()
+            nxt = request.args.get("next") or ""
+            return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("dashboard"))
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    if current_user():
+        audit("logout")
+        get_db().commit()
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/account", methods=["GET", "POST"])
+def account():
+    db = get_db()
+    if request.method == "POST":
+        f = request.form
+        from werkzeug.security import check_password_hash
+        if not check_password_hash(current_user()["password_hash"], f.get("current", "")):
+            flash("Current password is wrong", "error")
+        elif password_problem(f.get("new")) or f.get("new") != f.get("new2"):
+            flash(password_problem(f.get("new")) or "New passwords do not match", "error")
+        else:
+            db.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(f["new"]), current_user()["id"]))
+            audit("password_changed")
+            db.commit()
+            flash("Password changed", "ok")
+            return redirect(url_for("dashboard"))
+    return render_template("account.html")
+
+
+@app.route("/users")
+def users():
+    rows = get_db().execute("SELECT * FROM users ORDER BY active DESC, role, full_name").fetchall()
+    return render_template("users.html", rows=rows, ROLES=ROLES)
+
+
+@app.route("/users/new", methods=["GET", "POST"])
+@app.route("/users/<int:uid>/edit", methods=["GET", "POST"])
+def user_form(uid=None):
+    db = get_db()
+    u = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone() if uid else None
+    if uid and not u:
+        abort(404)
+    if request.method == "POST":
+        f = request.form
+        username, full_name = f.get("username", "").strip(), f.get("full_name", "").strip()
+        role = f.get("role") if f.get("role") in ROLES else "technician"
+        active = 1 if f.get("active") else 0
+        pw = f.get("password", "")
+        admins = db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1 AND id!=?",
+                            (uid or 0,)).fetchone()[0]
+        if not username or not full_name:
+            flash("Username and full name are required", "error")
+        elif (not u or pw) and password_problem(pw):
+            flash(password_problem(pw), "error")
+        elif u and u["role"] == "admin" and (role != "admin" or not active) and admins == 0:
+            flash("There must always be at least one active doctor/owner account.", "error")
+        else:
+            try:
+                if u:
+                    db.execute("UPDATE users SET username=?, full_name=?, role=?, active=? WHERE id=?",
+                               (username, full_name, role, active, uid))
+                    if pw:
+                        db.execute("UPDATE users SET password_hash=?, failed_logins=0, locked_until=NULL WHERE id=?",
+                                   (hash_password(pw), uid))
+                else:
+                    db.execute("""INSERT INTO users(username, full_name, role, password_hash, active, created_at)
+                                  VALUES (?,?,?,?,?,?)""", (username, full_name, role, hash_password(pw), active, now()))
+            except sqlite3.IntegrityError:
+                flash(f"Username '{username}' is already taken", "error")
+                return render_template("user_form.html", u=u, ROLES=ROLES)
+            audit("user_saved", f"{username} role={role} active={active}" + (" password reset" if u and pw else ""))
+            db.commit()
+            flash("User saved", "ok")
+            return redirect(url_for("users"))
+    return render_template("user_form.html", u=u, ROLES=ROLES)
+
+
+@app.route("/audit")
+def audit_page():
+    q = request.args.get("q", "").strip()
+    sql, args = "SELECT * FROM audit_log", []
+    if q:
+        sql += " WHERE action LIKE ? OR details LIKE ? OR username LIKE ?"
+        args = [f"%{q}%"] * 3
+    rows = get_db().execute(sql + " ORDER BY id DESC LIMIT 500", args).fetchall()
+    return render_template("audit.html", rows=rows, q=q)
+
+
+# --------------------------------------------------------------------------- settings, branding, licence
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     db = get_db()
     if request.method == "POST":
         for k in dbm.DEFAULT_SETTINGS:
-            if k in request.form:
-                db.execute("INSERT INTO settings(key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                           (k, request.form[k].strip()))
+            if k in request.form and k not in ("backup_dir", "backup_keep"):
+                dbm.set_setting(k, request.form[k].strip())
+        if "allow_lan_present" in request.form:
+            dbm.set_setting("allow_lan", "1" if request.form.get("allow_lan") else "0")
+        audit("settings_saved")
         db.commit()
         flash("Settings saved", "ok")
         return redirect(url_for("settings_page"))
-    return render_template("settings.html", db_path=dbm.DB_PATH)
+    return render_template("settings.html", logo=branding_file("logo"), signature=branding_file("signature"))
 
 
-@app.route("/backup")
-def backup():
-    backup_dir = os.path.join(dbm.DATA_DIR, "backups")
-    os.makedirs(backup_dir, exist_ok=True)
-    path = os.path.join(backup_dir, f"bethesda_backup_{datetime.now():%Y%m%d_%H%M%S}.db")
-    dest = sqlite3.connect(path)
-    get_db().backup(dest)
-    dest.close()
+@app.route("/settings/branding", methods=["POST"])
+def settings_branding():
+    from PIL import Image
+    kind = request.form.get("kind")
+    file = request.files.get("image")
+    if kind not in ("logo", "signature") or not file or not file.filename:
+        flash("Choose an image file first", "error")
+        return redirect(url_for("settings_page"))
+    try:
+        img = Image.open(file.stream)
+        img.load()
+    except Exception:  # noqa: BLE001
+        flash("That file is not a readable image (use PNG or JPG).", "error")
+        return redirect(url_for("settings_page"))
+    img = img.convert("RGBA")
+    img.thumbnail((800, 400))
+    os.makedirs(dbm.BRANDING_DIR, exist_ok=True)
+    img.save(os.path.join(dbm.BRANDING_DIR, f"{kind}.png"), "PNG")
+    audit("branding_uploaded", kind)
+    get_db().commit()
+    flash(f"{kind.title()} uploaded. It will appear on all new PDFs.", "ok")
+    return redirect(url_for("settings_page"))
+
+
+@app.route("/settings/branding/<kind>/delete", methods=["POST"])
+def branding_delete(kind):
+    path = branding_file(kind) if kind in ("logo", "signature") else None
+    if path:
+        os.remove(path)
+        audit("branding_removed", kind)
+        get_db().commit()
+    return redirect(url_for("settings_page"))
+
+
+@app.route("/branding/<kind>.png")
+def branding_image(kind):
+    path = branding_file(kind) if kind in ("logo", "signature") else None
+    if not path:
+        abort(404)
+    return send_file(path, mimetype="image/png", max_age=0)
+
+
+@app.route("/settings/licence", methods=["GET", "POST"])
+def licence_page():
+    if request.method == "POST":
+        text = request.form.get("licence_text", "").strip()
+        upload = request.files.get("licence_file")
+        if upload and upload.filename:
+            text = upload.read().decode("utf-8", "ignore").strip()
+        try:
+            p = lic.install(text)
+            audit("licence_installed", f"{p.get('lab')} until {p.get('expires')}")
+            get_db().commit()
+            flash(f"Licence installed: valid until {p['expires']}", "ok")
+        except ValueError as e:
+            flash(str(e), "error")
+        return redirect(url_for("licence_page"))
+    return render_template("licence.html", st=lic.status(get_settings()), machine_id=lic.machine_id())
+
+
+# --------------------------------------------------------------------------- backup & restore
+@app.route("/backup", methods=["GET", "POST"])
+def backup_page():
+    db = get_db()
+    if request.method == "POST":
+        dbm.set_setting("backup_dir", request.form.get("backup_dir", "").strip())
+        keep = fint(request.form.get("backup_keep"), 30)
+        dbm.set_setting("backup_keep", str(min(max(keep, 3), 365)))
+        audit("backup_settings_saved", request.form.get("backup_dir", ""))
+        db.commit()
+        flash("Backup settings saved. Click 'Back up now' to test the folder.", "ok")
+        return redirect(url_for("backup_page"))
+    s = get_settings()
+    month = date.today().strftime("%Y-%m")
+    m = db.execute("SELECT COUNT(*) AS visits, COUNT(DISTINCT patient_id) AS patients, "
+                   "SUM(status='Completed') AS reports FROM visits WHERE substr(visit_date,1,7)=?", (month,)).fetchone()
+    health = bk.status(s)
+    summary = (f"{s['lab_name']} - monthly software check ({date.today():%d %b %Y})\n"
+               f"Visits this month: {m['visits']}, patients: {m['patients']}, reports approved: {m['reports'] or 0}\n"
+               f"Last backup on this PC: {health['local_last'] or 'never'}\n"
+               f"Last external backup: {health['external_last'] or 'never'}\n"
+               f"Backup status: {'OK' if health['ok'] else 'ATTENTION - ' + ' '.join(health['problems'])}\n"
+               f"Database size: {os.path.getsize(dbm.DB_PATH) // 1024} KB, software version {__version__}")
+    return render_template("backup.html", backups=bk.list_backups(db), health=health, summary=summary,
+                           db_path=dbm.DB_PATH)
+
+
+@app.route("/backup/now", methods=["POST"])
+def backup_now():
+    res = bk.run_backup("manual")
+    for label, path, err in res:
+        flash(f"{label}: {'saved ' + os.path.basename(path) if not err else 'FAILED - ' + err}",
+              "error" if err else "ok")
+    return redirect(url_for("backup_page"))
+
+
+def _backup_path(name):
+    for b in bk.list_backups(get_db()):
+        if b["name"] == name and b["where"] == request.values.get("where"):
+            return b["path"]
+    abort(404)
+
+
+@app.route("/backup/download")
+def backup_download():
+    path = _backup_path(request.args.get("name", ""))
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
+
+
+@app.route("/backup/restore", methods=["POST"])
+def backup_restore():
+    path = _backup_path(request.form.get("name", ""))
+    if request.form.get("confirm") != "RESTORE":
+        flash("Type RESTORE in capitals to confirm.", "error")
+        return redirect(url_for("backup_page"))
+    dbm.close_db()
+    try:
+        bk.restore(path)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("backup_page"))
+    conn = dbm.connect()
+    conn.execute("INSERT INTO audit_log(ts, username, action, details) VALUES (?,?,?,?)",
+                 (now(), current_user()["username"], "backup_restored", os.path.basename(path)))
+    conn.commit()
+    conn.close()
+    session.clear()
+    flash("Data restored from backup. A safety copy of the previous data was saved first. Please log in again.", "ok")
+    return redirect(url_for("login"))
 
 
 @app.errorhandler(404)
 def not_found(_e):
     return render_template("message.html", title="Not found", message="That record does not exist."), 404
+
+
+@app.errorhandler(400)
+def bad_request(e):
+    return render_template("message.html", title="Please try again", message=e.description), 400
+
+
+@app.errorhandler(403)
+def forbidden(_e):
+    return render_template("message.html", title="Not allowed",
+                           message="Your account does not have permission for this action."), 403
