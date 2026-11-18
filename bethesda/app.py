@@ -905,7 +905,7 @@ def package_form(pkid=None):
 # --------------------------------------------------------------------------- login & users
 @app.route("/ping")
 def ping():
-    return "bethesda-labs"
+    return "balaji-xrays"
 
 
 @app.route("/setup", methods=["GET", "POST"])

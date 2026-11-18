@@ -1,13 +1,13 @@
 """
-Starts Bethesda Labs like a desktop application:
+Starts Balaji X Rays like a desktop application:
   * runs the web server quietly in the background (only one copy at a time)
   * opens the app in its own window (Edge/Chrome "app mode": no address bar or tabs)
   * puts an icon in the system tray: Open / Back up now / Quit
   * runs the daily automatic backup
 
-    BethesdaLabs.exe              normal start (opens the window)
-    BethesdaLabs.exe --background start without opening a window (used at Windows start-up)
-    BethesdaLabs.exe --lan        also allow other PCs on the lab network
+    BalajiXRays.exe              normal start (opens the window)
+    BalajiXRays.exe --background start without opening a window (used at Windows start-up)
+    BalajiXRays.exe --lan        also allow other PCs on the lab network
 """
 import argparse
 import os
@@ -21,7 +21,7 @@ import webbrowser
 
 from . import db as dbm
 
-APP_ID = b"bethesda-labs"
+APP_ID = b"balaji-xrays"
 
 
 def _log_to_file():
@@ -93,7 +93,7 @@ def _tray(port):
         res = bk.run_backup("manual")
         bad = [f"{label}: {err}" for label, _, err in res if err]
         try:
-            icon.notify("Backup failed - " + "; ".join(bad) if bad else "Backup completed", "Bethesda Labs")
+            icon.notify("Backup failed - " + "; ".join(bad) if bad else "Backup completed", "Balaji X Rays")
         except Exception:  # noqa: BLE001
             pass
 
@@ -101,19 +101,19 @@ def _tray(port):
         icon.stop()
         os._exit(0)
 
-    menu = pystray.Menu(pystray.MenuItem("Open Bethesda Labs", lambda i, _: open_window(port), default=True),
+    menu = pystray.Menu(pystray.MenuItem("Open Balaji X Rays", lambda i, _: open_window(port), default=True),
                         pystray.MenuItem("Back up now", do_backup),
                         pystray.Menu.SEPARATOR,
                         pystray.MenuItem("Quit (stop the software)", quit_app))
     try:
-        pystray.Icon("BethesdaLabs", image, "Bethesda Labs", menu).run()
+        pystray.Icon("BalajiXRays", image, "Balaji X Rays", menu).run()
         return True
     except Exception:  # noqa: BLE001
         return False
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Bethesda Labs")
+    ap = argparse.ArgumentParser(description="Balaji X Rays")
     ap.add_argument("--port", type=int, default=int(os.environ.get("BETHESDA_PORT", 5000)))
     ap.add_argument("--lan", action="store_true", help="allow other computers on the lab network")
     ap.add_argument("--background", "--no-browser", dest="background", action="store_true",
@@ -150,7 +150,7 @@ def main(argv=None):
     bk.start_scheduler()
 
     print("=" * 60)
-    print(f" Bethesda Labs is running: http://127.0.0.1:{args.port}")
+    print(f" Balaji X Rays is running: http://127.0.0.1:{args.port}")
     if lan:
         print(f" Other PCs on the lab network: http://<this-PC's-IP>:{args.port}")
     print(f" Data folder: {dbm.DATA_DIR}")

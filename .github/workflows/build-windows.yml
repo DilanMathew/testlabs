@@ -30,18 +30,18 @@ jobs:
         run: python tests/test_app.py
 
       - name: Build app with PyInstaller
-        run: pyinstaller packaging/BethesdaLabs.spec --noconfirm --distpath dist --workpath build
+        run: pyinstaller packaging/BalajiXRays.spec --noconfirm --distpath dist --workpath build
 
       - name: Check the built app starts
         shell: pwsh
         env:
           BETHESDA_DATA_DIR: ${{ runner.temp }}\bethesda-exe-test
         run: |
-          $p = Start-Process dist\BethesdaLabs\BethesdaLabs.exe -ArgumentList "--background","--no-tray","--port","5099" -PassThru
+          $p = Start-Process dist\BalajiXRays\BalajiXRays.exe -ArgumentList "--background","--no-tray","--port","5099" -PassThru
           $ok = $false
           for ($i = 0; $i -lt 40; $i++) {
             Start-Sleep -Seconds 1
-            try { if ((Invoke-WebRequest http://127.0.0.1:5099/ping -UseBasicParsing).Content -eq "bethesda-labs") { $ok = $true; break } } catch {}
+            try { if ((Invoke-WebRequest http://127.0.0.1:5099/ping -UseBasicParsing).Content -eq "balaji-xrays") { $ok = $true; break } } catch {}
           }
           Stop-Process -Id $p.Id -Force
           if (-not $ok) { Get-ChildItem -Recurse $env:BETHESDA_DATA_DIR -ErrorAction SilentlyContinue; Get-Content "$env:BETHESDA_DATA_DIR\logs\app.log" -ErrorAction SilentlyContinue; throw "exe did not start" }
@@ -57,7 +57,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BethesdaLabs-Windows-Installer
+          name: BalajiXRays-Windows-Installer
           path: dist/installer/*.exe
           retention-days: 30
 

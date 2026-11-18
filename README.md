@@ -1,4 +1,4 @@
-# Bethesda Labs – Lab Management Software (offline)
+# Balaji X Rays – Lab Management Software (offline)
 
 Desktop software for a blood-collection / pathology lab. It runs on the lab's own Windows PC, needs no internet, and keeps all data on that PC.
 
@@ -19,19 +19,19 @@ Desktop software for a blood-collection / pathology lab. It runs on the lab's ow
 
 ## A. Installing at the lab (Windows)
 
-1. Get the installer `BethesdaLabs-Setup-x.y.z.exe` (see section D).
+1. Get the installer `BalajiXRays-Setup-x.y.z.exe` (see section D).
 2. Double-click it. Windows may show **"Windows protected your PC"**, because the installer is not code-signed: click **More info → Run anyway**.
 3. Keep both options ticked: **Desktop icon** and **Start automatically when Windows starts**. Auto-start keeps the daily backup running.
-4. Bethesda Labs opens in its own window. Its icon (red drop) sits in the system tray near the clock. Right-click it for **Open / Back up now / Quit**.
+4. Balaji X Rays opens in its own window. Its icon (red drop) sits in the system tray near the clock. Right-click it for **Open / Back up now / Quit**.
 
-The data lives in `C:\ProgramData\BethesdaLabs` and is **kept if the software is uninstalled or updated**.
+The data lives in `C:\ProgramData\BalajiXRays` and is **kept if the software is uninstalled or updated**.
 
 **Updating:** run the newer installer over the old one. The data is untouched.
 
 ### First-time setup (inside the app)
 1. Create the **doctor / owner** account. This name is printed as "approved by" on reports.
 2. **Admin → Lab settings & logo**: lab name, address and pathologist, then upload the **logo** and **signature**. For the signature, sign on white paper, photograph it and crop it tightly.
-3. **Admin → Backup & restore**: set the external folder (for example `E:\BethesdaBackup` on a USB drive that stays plugged in, or a Google Drive/OneDrive folder), then click **Back up now** to test it.
+3. **Admin → Backup & restore**: set the external folder (for example `E:\BalajiBackup` on a USB drive that stays plugged in, or a Google Drive/OneDrive folder), then click **Back up now** to test it.
 4. **Admin → Users**: add a login for each technician or receptionist.
 5. **Hospitals / Doctors**: add referrers and their commission %.
 6. **Tests**: check prices, and have the pathologist **verify every reference range** against the lab's analyser and reagent kit inserts.
@@ -57,7 +57,7 @@ Tick **Admin → Lab settings → Allow other computers…**, then restart the s
 | Change prices, tests, packages, settings, users, backup, licence | ✔ | ✖ |
 
 ## C. Backups and restore
-- An automatic backup runs every day while the software is running, to `C:\ProgramData\BethesdaLabs\backups` **and** the external folder. The last 30 are kept in each.
+- An automatic backup runs every day while the software is running, to `C:\ProgramData\BalajiXRays\backups` **and** the external folder. The last 30 are kept in each.
 - The dashboard shows a red warning if a backup has not worked for 2 days (for example, the USB drive was unplugged).
 - **Admin → Backup & restore → Restore**: pick a backup and type `RESTORE`. A safety copy of the current data is saved first.
 - Take the USB drive home once a week.
@@ -68,7 +68,7 @@ Tick **Admin → Lab settings → Allow other computers…**, then restart the s
 ## D. For the developer
 
 ### Build the Windows installer
-**Automatically (recommended):** every push to GitHub runs **Actions → Build Windows installer**. Open the run and download **BethesdaLabs-Windows-Installer** under *Artifacts*. Pushing a tag such as `v1.1.0` also attaches the installer to a GitHub Release.
+**Automatically (recommended):** every push to GitHub runs **Actions → Build Windows installer**. Open the run and download **BalajiXRays-Windows-Installer** under *Artifacts*. Pushing a tag such as `v1.1.0` also attaches the installer to a GitHub Release.
 
 **On a Windows PC:** install Python 3.12 and [Inno Setup 6](https://jrsoftware.org/isinfo.php), then double-click `packaging\build_windows.bat`.
 
@@ -83,7 +83,7 @@ This creates:
 
 For each lab or renewal, read the **Computer ID** from the lab's *Admin → Licence* page and run:
 ```bash
-python tools/make_licence.py issue --lab "Bethesda Labs" --expires 2027-01-31 --machine ABCD-1234-EF56-7890
+python tools/make_licence.py issue --lab "Balaji X Rays" --expires 2027-01-31 --machine ABCD-1234-EF56-7890
 ```
 Send the `.lic` file (or its text) to the lab and install it under *Admin → Licence*. `--grace 30` (the default) is the number of days after expiry before new registrations pause. Leave out `--machine` to allow any PC.
 
@@ -95,7 +95,7 @@ When run from source, data is stored in `./data/`.
 
 ### Project layout
 ```
-run.py / packaging/BethesdaLabs.py   start the app (launcher: server + window + tray + backups)
+run.py / packaging/BalajiXRays.py   start the app (launcher: server + window + tray + backups)
 bethesda/app.py          screens and business logic
 bethesda/security.py     logins, roles, CSRF protection, activity log
 bethesda/backup.py       automatic backup, restore

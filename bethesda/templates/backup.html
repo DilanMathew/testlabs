@@ -9,7 +9,7 @@
   <form method="post" class="grid" style="grid-template-columns:minmax(0,3fr) minmax(0,1fr) auto;align-items:end">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div><label>External backup folder (USB drive or a Google Drive / OneDrive folder)</label>
-      <input name="backup_dir" value="{{ settings.backup_dir }}" placeholder="e.g. E:\BethesdaBackup  or  C:\Users\Lab\Google Drive\BethesdaBackup"></div>
+      <input name="backup_dir" value="{{ settings.backup_dir }}" placeholder="e.g. E:\BalajiBackup  or  C:\Users\Lab\Google Drive\BalajiBackup"></div>
     <div><label>Backups to keep</label><input type="number" name="backup_keep" min="3" max="365" value="{{ settings.backup_keep }}"></div>
     <div><button class="btn">Save</button></div>
   </form>

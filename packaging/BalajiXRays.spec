@@ -1,5 +1,5 @@
 # PyInstaller build recipe.  Run from the repository root:
-#     pyinstaller packaging/BethesdaLabs.spec --noconfirm
+#     pyinstaller packaging/BalajiXRays.spec --noconfirm
 import os
 
 root = os.path.abspath(os.path.join(SPECPATH, ".."))
@@ -14,7 +14,7 @@ else:
     print("WARNING: bethesda/licence_pubkey.pem not found - this build will have licensing switched OFF.")
 
 a = Analysis(
-    [os.path.join(SPECPATH, "BethesdaLabs.py")],
+    [os.path.join(SPECPATH, "BalajiXRays.py")],
     pathex=[root],
     datas=datas,
     hiddenimports=["pystray._win32", "waitress", "PIL.ImageDraw"],
@@ -24,9 +24,9 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [],
     exclude_binaries=True,
-    name="BethesdaLabs",
+    name="BalajiXRays",
     icon=os.path.join(SPECPATH, "icon.ico"),
     console=False,          # no black console window
     upx=False,
 )
-coll = COLLECT(exe, a.binaries, a.datas, name="BethesdaLabs", upx=False)
+coll = COLLECT(exe, a.binaries, a.datas, name="BalajiXRays", upx=False)

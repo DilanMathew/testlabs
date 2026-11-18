@@ -6,11 +6,11 @@ python -m venv .buildenv || goto :err
 call .buildenv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements.txt pyinstaller || goto :err
-pyinstaller packaging\BethesdaLabs.spec --noconfirm --distpath dist --workpath build || goto :err
+pyinstaller packaging\BalajiXRays.spec --noconfirm --distpath dist --workpath build || goto :err
 for /f %%v in ('python -c "import bethesda; print(bethesda.__version__)"') do set APPVER=%%v
 "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /DAppVersion=%APPVER% packaging\installer.iss || goto :err
 echo.
-echo Done: dist\installer\BethesdaLabs-Setup-%APPVER%.exe
+echo Done: dist\installer\BalajiXRays-Setup-%APPVER%.exe
 pause
 exit /b 0
 :err

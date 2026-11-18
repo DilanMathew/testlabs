@@ -1,4 +1,4 @@
-; Inno Setup script - builds BethesdaLabs-Setup-<version>.exe
+; Inno Setup script - builds BalajiXRays-Setup-<version>.exe
 ; Build:  iscc /DAppVersion=1.1.0 packaging\installer.iss   (after PyInstaller)
 
 #ifndef AppVersion
@@ -7,15 +7,15 @@
 
 [Setup]
 AppId={{6A1F7C2E-3B5D-4C8E-9F21-B37A8D0E4C55}
-AppName=Bethesda Labs
+AppName=Balaji X Rays
 AppVersion={#AppVersion}
-AppPublisher=Bethesda Labs Software
-DefaultDirName={autopf}\Bethesda Labs
-DefaultGroupName=Bethesda Labs
+AppPublisher=Balaji X Rays
+DefaultDirName={autopf}\Balaji X Rays
+DefaultGroupName=Balaji X Rays
 OutputDir=..\dist\installer
-OutputBaseFilename=BethesdaLabs-Setup-{#AppVersion}
+OutputBaseFilename=BalajiXRays-Setup-{#AppVersion}
 SetupIconFile=icon.ico
-UninstallDisplayIcon={app}\BethesdaLabs.exe
+UninstallDisplayIcon={app}\BalajiXRays.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -29,23 +29,23 @@ Name: "autostart"; Description: "Start automatically when Windows starts (recomm
 
 [Dirs]
 ; Shared data folder, writable by every Windows user of this PC. Never removed on uninstall.
-Name: "{commonappdata}\BethesdaLabs"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{commonappdata}\BalajiXRays"; Permissions: users-modify; Flags: uninsneveruninstall
 
 [Files]
-Source: "..\dist\BethesdaLabs\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\dist\BalajiXRays\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\Bethesda Labs"; Filename: "{app}\BethesdaLabs.exe"
-Name: "{group}\Bethesda Labs data folder"; Filename: "{commonappdata}\BethesdaLabs"
-Name: "{group}\Uninstall Bethesda Labs"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Bethesda Labs"; Filename: "{app}\BethesdaLabs.exe"; Tasks: desktopicon
-Name: "{commonstartup}\Bethesda Labs"; Filename: "{app}\BethesdaLabs.exe"; Parameters: "--background"; Tasks: autostart
+Name: "{group}\Balaji X Rays"; Filename: "{app}\BalajiXRays.exe"
+Name: "{group}\Balaji X Rays data folder"; Filename: "{commonappdata}\BalajiXRays"
+Name: "{group}\Uninstall Balaji X Rays"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\Balaji X Rays"; Filename: "{app}\BalajiXRays.exe"; Tasks: desktopicon
+Name: "{commonstartup}\Balaji X Rays"; Filename: "{app}\BalajiXRays.exe"; Parameters: "--background"; Tasks: autostart
 
 [Run]
-Filename: "{app}\BethesdaLabs.exe"; Description: "Open Bethesda Labs now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\BalajiXRays.exe"; Description: "Open Balaji X Rays now"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{cmd}"; Parameters: "/C taskkill /F /IM BethesdaLabs.exe"; Flags: runhidden; RunOnceId: "StopApp"
+Filename: "{cmd}"; Parameters: "/C taskkill /F /IM BalajiXRays.exe"; Flags: runhidden; RunOnceId: "StopApp"
 
 [Messages]
-FinishedLabel=Bethesda Labs is installed.%n%nYour data is stored in C:\ProgramData\BethesdaLabs and is kept even if the software is uninstalled.
+FinishedLabel=Balaji X Rays is installed.%n%nYour data is stored in C:\ProgramData\BalajiXRays and is kept even if the software is uninstalled.

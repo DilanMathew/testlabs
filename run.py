@@ -1,6 +1,6 @@
 """
-Start Bethesda Labs from the source code (developer / Mac / Linux use).
-The Windows installer runs the same thing as BethesdaLabs.exe.
+Start Balaji X Rays from the source code (developer / Mac / Linux use).
+The Windows installer runs the same thing as BalajiXRays.exe.
 
     python run.py                 opens the app window, icon in the system tray
     python run.py --lan           also reachable from other PCs on the same network

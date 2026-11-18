@@ -16,10 +16,10 @@ def _default_data_dir():
     if not getattr(sys, "frozen", False):
         return os.path.join(BASE_DIR, "data")
     if os.name == "nt":
-        return os.path.join(os.environ.get("PROGRAMDATA", r"C:\ProgramData"), "BethesdaLabs")
+        return os.path.join(os.environ.get("PROGRAMDATA", r"C:\ProgramData"), "BalajiXRays")
     if sys.platform == "darwin":
-        return os.path.expanduser("~/Library/Application Support/BethesdaLabs")
-    return os.path.expanduser("~/.bethesdalabs")
+        return os.path.expanduser("~/Library/Application Support/BalajiXRays")
+    return os.path.expanduser("~/.balajixrays")
 
 
 DATA_DIR = os.environ.get("BETHESDA_DATA_DIR") or _default_data_dir()
@@ -200,11 +200,11 @@ CREATE INDEX IF NOT EXISTS ix_visits_patient ON visits(patient_id);
 """
 
 DEFAULT_SETTINGS = {
-    "lab_name": "Bethesda Labs",
-    "lab_tagline": "Diagnostic & Pathology Laboratory",
+    "lab_name": "Balaji X Rays",
+    "lab_tagline": "X-Ray & Diagnostic Laboratory",
     "lab_address": "Address line, City - PIN",
     "lab_phone": "+91 00000 00000",
-    "lab_email": "info@bethesdalabs.example",
+    "lab_email": "info@balajixrays.example",
     "pathologist_name": "Dr. Pathologist Name",
     "pathologist_qualification": "MD (Pathology)",
     "technician_name": "",

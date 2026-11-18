@@ -7,7 +7,7 @@ One time - create your signing keys:
       -> public key : bethesda/licence_pubkey.pem       (commit this; it is built into the app)
 
 Each lab / renewal:
-    python tools/make_licence.py issue --lab "Bethesda Labs" --expires 2027-01-31 --machine ABCD-1234-EF56-7890
+    python tools/make_licence.py issue --lab "Balaji X Rays" --expires 2027-01-31 --machine ABCD-1234-EF56-7890
       (--machine = the "Computer ID" shown in the app under Settings -> Licence; omit to allow any PC)
       -> prints the licence text and saves <lab>_<expiry>.lic. Send the file or text to the lab.
 """
